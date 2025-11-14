@@ -1,0 +1,9 @@
+LINK: localhost
+
+Catatan Penting
+
+Proyek ini tidak dapat di-hosting di layanan seperti Vercel/Netlify karena membutuhkan banyak security tools sistem-level (seperti Nmap, Nuclei, Dalfox, FFUF, John, Hashcat, dll) yang harus di-install langsung di server. Karena itu, website hanya bisa dijalankan melalui localhost.
+
+Jika halaman tidak ter-render sempurna atau terasa lag, cukup refresh beberapa kali hingga semua elemen termuat dengan benar. Setelah cache stabil, tampilan akan berjalan normal.
+
+Untuk penggunaan penuh, termasuk instalasi tool, silakan ikuti panduan di README.md.
