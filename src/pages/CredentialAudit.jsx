@@ -147,7 +147,7 @@ const CredentialAudit = () => {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-5">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5">
         <div className="space-y-6 lg:col-span-3">
           <TerminalOutput logs={logs} status={scanning ? 'Scanning...' : result ? 'Done' : 'Ready'} />
           <div className="glass-panel space-y-3 p-6 text-sm text-slate-300">

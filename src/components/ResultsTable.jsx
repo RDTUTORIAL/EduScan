@@ -5,6 +5,7 @@ const baseAlignClass = {
   center: 'text-center',
   right: 'text-right',
 };
+const baseCellClass = 'px-6 py-3 text-slate-300 break-words align-top max-w-[280px] sm:max-w-none';
 
 const ResultsTable = ({ title, columns, data, emptyText }) => (
   <div className="glass-panel overflow-hidden">
@@ -13,7 +14,7 @@ const ResultsTable = ({ title, columns, data, emptyText }) => (
       <span className="text-xs text-slate-500">{data.length} row(s)</span>
     </div>
     <div className="overflow-x-auto">
-      <table className="min-w-full divide-y divide-slate-800/80 text-left text-sm">
+      <table className="w-full min-w-full divide-y divide-slate-800/80 text-left text-xs sm:text-sm">
         <thead className="bg-slate-900/60 text-xs uppercase tracking-wider text-slate-400">
           <tr>
             {columns.map((column) => (
@@ -37,9 +38,9 @@ const ResultsTable = ({ title, columns, data, emptyText }) => (
                 const value = column.render ? column.render(row[column.key], row) : row[column.key];
                 const alignClass = baseAlignClass[column.align || 'left'];
                 const extraClass = column.className || '';
-                const monoClass = column.mono ? 'font-mono text-xs' : '';
+                const monoClass = column.mono ? 'font-mono text-[11px] sm:text-xs whitespace-pre-wrap break-words' : '';
                 return (
-                  <td key={column.key} className={`px-6 py-3 text-slate-300 ${alignClass} ${monoClass} ${extraClass}`}>
+                  <td key={column.key} className={`${baseCellClass} ${alignClass} ${monoClass} ${extraClass}`}>
                     {value ?? '—'}
                   </td>
                 );

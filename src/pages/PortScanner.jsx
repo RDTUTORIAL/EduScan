@@ -116,23 +116,23 @@ const PortScanner = () => {
 
   return (
     <motion.section
-      className="flex flex-col gap-6"
+      className="flex flex-col gap-6 min-w-0"
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3 }}
     >
-      <header className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/5 bg-gradient-to-r from-slate-900/70 via-slate-900/40 to-slate-900/70 p-6 shadow-2xl shadow-black/30">
+      <header className="flex flex-col gap-4 rounded-2xl border border-white/5 bg-gradient-to-r from-slate-900/70 via-slate-900/40 to-slate-900/70 p-5 shadow-2xl shadow-black/30 sm:p-6 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.4em] text-slate-500">Active Tool</p>
           <h2 className="text-2xl font-semibold text-white">Port Scanner</h2>
           <p className="text-sm text-slate-400">Mirip Nmap dengan visual interaktif & log real-time.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button type="button" className="btn-secondary" onClick={handleClear}>
+        <div className="flex flex-wrap gap-3">
+          <button type="button" className="btn-secondary w-full sm:w-auto" onClick={handleClear}>
             <RefreshCcw className="h-4 w-4" />
             Clear
           </button>
-          <button type="button" className="btn-primary" disabled={!isValid || scanning} onClick={handleScan}>
+          <button type="button" className="btn-primary w-full sm:w-auto" disabled={!isValid || scanning} onClick={handleScan}>
             <Activity className="h-4 w-4" />
             Start Scan
           </button>
@@ -159,7 +159,7 @@ const PortScanner = () => {
       </ScanForm>
 
       {scanning && (
-        <div className="glass-panel relative overflow-hidden p-5">
+        <div className="glass-panel relative overflow-hidden p-4 sm:p-5">
           <div className="flex items-center justify-between text-sm text-slate-400">
             <span className="flex items-center gap-2">
               <span className="inline-flex h-3 w-3 animate-spin rounded-full border-2 border-cyan-400 border-t-transparent" />
@@ -176,8 +176,8 @@ const PortScanner = () => {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-5">
-        <div className="lg:col-span-3 space-y-6">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5">
+        <div className="lg:col-span-3 space-y-6 min-w-0">
           <TerminalOutput logs={logs} status={scanning ? 'Scanning...' : results ? 'Done' : 'Ready'} />
           <ResultsTable
             title="Port & Service Mapping"
@@ -191,9 +191,11 @@ const PortScanner = () => {
             emptyText="Belum ada data. Jalankan scan untuk melihat hasil."
           />
         </div>
-        <div className="lg:col-span-2 space-y-6">
-          <RiskChart score={results?.risk_score || 12} label="Risk Meter" />
-          <div className="glass-panel space-y-2 p-6 text-sm text-slate-300">
+        <div className="lg:col-span-2 space-y-6 min-w-0">
+          <div className="glass-panel p-4 sm:p-6">
+            <RiskChart score={results?.risk_score ?? 0} label="Risk Meter" />
+          </div>
+          <div className="glass-panel space-y-2 p-4 text-sm text-slate-300 sm:p-6">
             <p className="font-semibold text-slate-100">Intel Ring</p>
             {(results?.insights || ['Belum ada insight, jalankan scan terlebih dahulu.']).map((insight) => (
               <p key={insight} className="flex items-start gap-2 text-xs text-slate-400">
@@ -203,7 +205,7 @@ const PortScanner = () => {
             ))}
           </div>
           {results?.analysis && (
-            <div className="glass-panel space-y-2 p-6 text-sm text-slate-300">
+            <div className="glass-panel space-y-2 p-4 text-sm text-slate-300 sm:p-6">
               <p className="font-semibold text-slate-100">Analisis</p>
               {(results.analysis.length ? results.analysis : ['Belum ada port terbuka.']).map((item) => (
                 <p key={item} className="text-xs text-slate-400">
@@ -213,7 +215,7 @@ const PortScanner = () => {
             </div>
           )}
           {results?.recommendations && (
-            <div className="glass-panel space-y-2 p-6 text-sm text-slate-300">
+            <div className="glass-panel space-y-2 p-4 text-sm text-slate-300 sm:p-6">
               <p className="font-semibold text-slate-100">Rekomendasi</p>
               {(results.recommendations.length ? results.recommendations : ['Tidak ada rekomendasi khusus.']).map(
                 (item) => (
@@ -224,7 +226,7 @@ const PortScanner = () => {
               )}
             </div>
           )}
-          <div className="glass-panel space-y-4 p-6">
+          <div className="glass-panel space-y-4 p-4 sm:p-6">
             <p className="text-sm font-semibold text-slate-200">Port Status Overview</p>
             <div className="h-48">
               <ResponsiveContainer>
@@ -246,9 +248,9 @@ const PortScanner = () => {
               ))}
             </div>
           </div>
-          <div className="glass-panel space-y-2 p-6">
+          <div className="glass-panel space-y-2 p-4 sm:p-6">
             <p className="text-sm font-semibold text-slate-200">Command Equivalent</p>
-            <pre className="rounded-xl border border-slate-800/80 bg-black/70 p-4 font-mono text-xs text-emerald-200">
+            <pre className="rounded-xl border border-slate-800/80 bg-black/70 p-4 font-mono text-xs text-emerald-200 whitespace-pre-wrap break-words">
               {results?.command || 'nmap -sV -p 1-1000 eduscan-demo.local'}
             </pre>
           </div>

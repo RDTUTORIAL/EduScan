@@ -53,19 +53,21 @@ const HomeDashboard = ({ routes }) => {
 
   const timeline = useMemo(() => {
     const recentData = userStats ? userStats.recent_scans : history;
-    return recentData.slice(0, 6).map((entry) => ({
+    return (recentData || []).slice(0, 6).map((entry) => ({
       name: entry.tool,
       risk: entry.risk || 0,
     }));
   }, [history, userStats]);
 
+  const chartData = useMemo(() => [...timeline].reverse(), [timeline]);
+
   const quickActions = routes.filter((route) => route.id !== 'home' && route.id !== 'settings').slice(0, 4);
 
   return (
-    <motion.section className="flex flex-col gap-6" initial={{ opacity: 0.7, y: 15 }} animate={{ opacity: 1, y: 0 }}>
-      <div className="rounded-3xl border border-white/5 bg-gradient-to-r from-slate-900/60 via-slate-900/20 to-slate-900/70 p-8 shadow-2xl shadow-black/30">
+    <motion.section className="flex flex-col gap-6 min-w-0" initial={{ opacity: 0.7, y: 15 }} animate={{ opacity: 1, y: 0 }}>
+      <div className="rounded-3xl border border-white/5 bg-gradient-to-r from-slate-900/60 via-slate-900/20 to-slate-900/70 p-6 shadow-2xl shadow-black/30 md:p-8">
         <p className="text-xs uppercase tracking-[0.4em] text-slate-400">Welcome back</p>
-        <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
+        <div className="mt-3 flex flex-wrap items-start justify-between gap-4 md:items-center">
           <div>
             <h1 className="text-3xl font-semibold text-white">EduScan Threat Lab</h1>
             <p className="text-sm text-slate-400">
@@ -78,7 +80,7 @@ const HomeDashboard = ({ routes }) => {
         </div>
       </div>
 
-      <div className="grid gap-5 md:grid-cols-4">
+      <div className="grid min-w-0 gap-5 md:grid-cols-2 lg:grid-cols-4">
         <div className="glass-panel space-y-2 p-6">
           <p className="text-sm text-slate-400">Total Scans</p>
           <p className="text-3xl font-semibold text-white">{loading ? '...' : stats.totalScans}</p>
@@ -110,11 +112,11 @@ const HomeDashboard = ({ routes }) => {
       </div>
       
       {/* User Session Info */}
-      <div className="glass-panel p-6">
-        <div className="flex items-center justify-between">
-          <div>
+      <div className="glass-panel p-4 md:p-6">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-1">
             <p className="text-sm text-slate-400">Session Information</p>
-            <p className="text-lg font-semibold text-white">
+            <p className="text-base font-semibold text-white">
               {loading ? 'Loading user data...' : `Member since ${stats.memberSince}`}
             </p>
             {userStats && (
@@ -123,7 +125,7 @@ const HomeDashboard = ({ routes }) => {
               </p>
             )}
           </div>
-          <div className="flex items-center gap-2 px-3 py-2 bg-emerald-500/10 rounded-full">
+          <div className="inline-flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1.5">
             <Users className="h-4 w-4 text-emerald-400" />
             <span className="text-xs text-emerald-300">
               {userStats ? 'Synced' : 'Local'} Session
@@ -132,8 +134,8 @@ const HomeDashboard = ({ routes }) => {
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-5">
-        <div className="glass-panel p-6 lg:col-span-3">
+      <div className="grid min-w-0 gap-6 md:grid-cols-2 lg:grid-cols-5">
+        <div className="glass-panel p-6 lg:col-span-3 min-w-0">
           <div className="flex items-center justify-between">
             <p className="text-sm font-semibold text-slate-200">Trend Risiko Terakhir</p>
             <span className="text-xs text-slate-500 inline-flex items-center gap-1">
@@ -141,25 +143,35 @@ const HomeDashboard = ({ routes }) => {
               Real-time
             </span>
           </div>
-          <div className="mt-4 h-56">
-            <ResponsiveContainer>
-              <AreaChart data={timeline.reverse()}>
+          <div className="mt-4 h-36 w-full min-w-0 sm:h-48 md:h-56">
+            <ResponsiveContainer minWidth={180} minHeight={140} width="100%" height="100%">
+              <AreaChart data={chartData} margin={{ top: 5, right: 6, left: -10, bottom: 20 }}>
                 <defs>
                   <linearGradient id="colorRisk" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.8} />
                     <stop offset="95%" stopColor="#06b6d4" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <XAxis dataKey="name" stroke="#475569" />
-                <YAxis stroke="#475569" />
+                <XAxis
+                  dataKey="name"
+                  stroke="#475569"
+                  tickLine={false}
+                  axisLine={false}
+                  interval={0}
+                  tickMargin={10}
+                  tick={{ fill: '#94a3b8', fontSize: 10 }}
+                  angle={-20}
+                  tickFormatter={(value) => (value?.length > 10 ? `${value.slice(0, 10)}…` : value)}
+                />
+                <YAxis stroke="#475569" tick={{ fill: '#94a3b8', fontSize: 10 }} width={28} />
                 <Area type="monotone" dataKey="risk" stroke="#06b6d4" fillOpacity={1} fill="url(#colorRisk)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
-        <div className="glass-panel space-y-4 p-6 lg:col-span-2">
+        <div className="glass-panel space-y-4 p-6 lg:col-span-2 min-w-0">
           <p className="text-sm font-semibold text-slate-200">Quick Actions</p>
-          <div className="grid gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             {quickActions.map((action) => (
               <Link
                 key={action.id}

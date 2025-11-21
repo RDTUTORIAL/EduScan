@@ -81,13 +81,31 @@ const OsintHub = () => {
     const tc = outputs.find((t) => (t?.name || '').toLowerCase() === 'truecaller')
       || outputs.find((t) => (t?.name || '').toLowerCase() === 'truecaller-web');
     const tcDet = (tc && typeof tc.details === 'object') ? tc.details : {};
+
+    // Derive fallback info from phoneinfoga entries (which often only return text)
+    const phoneinfoga = outputs.find((t) => (t?.name || '').toLowerCase() === 'phoneinfoga');
+    const derived = {};
+    const parseEntries = Array.isArray(phoneinfoga?.entries) ? phoneinfoga.entries : [];
+    for (const entry of parseEntries) {
+      const raw = String(entry.site || '');
+      const text = raw.replace(/^URL:\s*/i, '');
+      const mE = text.match(/E164:\s*([+\d]+)/i);
+      const mInt = text.match(/International:\s*([+\d]+)/i);
+      const mNat = text.match(/Local:\s*([+\d-]+)/i) || text.match(/Raw local:\s*([+\d-]+)/i);
+      const mCountry = text.match(/Country:\s*([A-Z]{2,})/i);
+      if (mE) derived.e164 = mE[1];
+      if (mInt) derived.international = mInt[1];
+      if (mNat) derived.national = mNat[1];
+      if (mCountry) derived.country = mCountry[1];
+    }
+
     return {
-      source: pn ? 'phonenumbers' : null,
-      e164: det.e164 || result.e164 || '-',
-      international: det.international || result.international || '-',
-      national: det.national || result.national || '-',
-      country: result.country || det.location || '-',
-      countryCode: det.country_code || result.country_code || '-',
+      source: pn ? 'phonenumbers' : phoneinfoga ? 'phoneinfoga' : null,
+      e164: det.e164 || result.e164 || derived.e164 || '-',
+      international: det.international || result.international || derived.international || '-',
+      national: det.national || result.national || derived.national || '-',
+      country: result.country || det.location || derived.country || '-',
+      countryCode: det.country_code || result.country_code || derived.country || '-',
       timezone: tz || result.timezone || '-',
       carrier: det.carrier || result.carrier || '-',
       region: result.region || result.location || det.location || '-',
@@ -180,7 +198,7 @@ const OsintHub = () => {
   };
 
   return (
-    <motion.section className="flex flex-col gap-6" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+    <motion.section className="flex flex-col gap-6 min-w-0" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
       <header className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/5 bg-gradient-to-r from-slate-900/60 to-slate-900/30 p-6">
         <div>
           <p className="text-xs uppercase tracking-[0.4em] text-slate-500">Active Tool</p>
@@ -189,7 +207,7 @@ const OsintHub = () => {
         </div>
       </header>
 
-      <div className="glass-panel space-y-5 p-6">
+      <div className="glass-panel space-y-5 p-6 min-w-0">
         <div className="flex flex-wrap gap-2">
           {TABS.map((tab) => (
             <button
@@ -211,23 +229,28 @@ const OsintHub = () => {
             </button>
           ))}
         </div>
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           <input
             type="text"
-            className="flex-1 rounded-2xl border border-slate-800/60 bg-slate-900/40 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500"
+            className="w-full rounded-2xl border border-slate-800/60 bg-slate-900/40 px-4 py-3 text-sm text-slate-100 placeholder:text-slate-500 sm:flex-1"
             placeholder={tabMeta.placeholder}
             value={inputValue}
             onChange={(event) => setInputValue(event.target.value)}
           />
-          <button type="button" className="btn-primary" disabled={!inputValue.trim() || scanning} onClick={handleScan}>
+          <button
+            type="button"
+            className="btn-primary w-full sm:w-auto"
+            disabled={!inputValue.trim() || scanning}
+            onClick={handleScan}
+          >
             Start Scan
           </button>
-          <button type="button" className="btn-secondary" onClick={handleClear}>
+          <button type="button" className="btn-secondary w-full sm:w-auto" onClick={handleClear}>
             Clear
           </button>
           <button
             type="button"
-            className="btn-secondary"
+            className="btn-secondary w-full sm:w-auto"
             disabled={!result}
             onClick={() => result && exportToJson(result, 'osint-report.json')}
           >
@@ -237,7 +260,7 @@ const OsintHub = () => {
           {activeTab === 'phone' && (
             <button
               type="button"
-              className="btn-secondary"
+              className="btn-secondary w-full sm:w-auto"
               onClick={() => setShowAdvanced((p) => !p)}
             >
               {showAdvanced ? 'Hide Advanced' : 'Advanced'}
@@ -245,10 +268,10 @@ const OsintHub = () => {
           )}
         </div>
         {activeTab === 'phone' && showAdvanced && (
-          <div className="flex items-center gap-3">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <input
               type="text"
-              className="flex-1 rounded-2xl border border-slate-800/60 bg-slate-900/40 px-4 py-3 text-xs text-slate-100 placeholder:text-slate-500"
+              className="w-full rounded-2xl border border-slate-800/60 bg-slate-900/40 px-4 py-3 text-xs text-slate-100 placeholder:text-slate-500 sm:flex-1"
               placeholder="Truecaller Cookie (tc_session=...; ...)"
               value={truecallerCookie}
               onChange={(e) => {
@@ -261,14 +284,14 @@ const OsintHub = () => {
         )}
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-5">
-        <div className="space-y-6 lg:col-span-3">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5 min-w-0">
+        <div className="space-y-6 lg:col-span-3 min-w-0">
           <TerminalOutput logs={logs} status={scanning ? 'Scanning...' : result ? 'Done' : 'Ready'} />
-          <div className="glass-panel space-y-4 p-6">
-            <div className="flex items-center justify-between">
+          <div className="glass-panel space-y-4 p-6 min-w-0">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <p className="text-sm font-semibold text-slate-200">OSINT Summary {result ? `• ${new Date(result.timestamp).toLocaleString()}` : ''}</p>
               {result?.value && (
-                <span className="rounded-xl border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300">Target: {result.value}</span>
+                <span className="rounded-xl border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-300 break-all">Target: {result.value}</span>
               )}
             </div>
             {!result && <p className="text-sm text-slate-500">Masukkan data lalu jalankan scan.</p>}
@@ -441,7 +464,7 @@ const OsintHub = () => {
                                 {result.wappalyzer_technologies ? (
                                   <div className="mt-2 space-y-1">
                                     {Object.entries(result.wappalyzer_technologies).map(([category, techs]) => (
-                                      <div key={category} className="text-xs">
+                                      <div key={category} className="text-xs break-words">
                                         <span className="text-violet-400 font-semibold">{category}:</span>
                                         <span className="ml-2 text-violet-200">
                                           {techs.map(tech => `${tech.name}${tech.version ? ` ${tech.version}` : ''}`).join(', ')}
@@ -450,7 +473,7 @@ const OsintHub = () => {
                                     ))}
                                   </div>
                                 ) : (
-                                  <p className="mt-1 text-xs text-violet-100">
+                                  <p className="mt-1 text-xs text-violet-100 break-words">
                                     {Array.isArray(result.technologies) ? result.technologies.join(', ') : (result.technologies || 'Scanning...')}
                                   </p>
                                 )}
@@ -468,7 +491,7 @@ const OsintHub = () => {
           </div>
           {nonWebToolOutputs.length > 0 && (
             <div className="glass-panel space-y-4 p-6">
-              <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                 <p className="text-sm font-semibold text-slate-200">Tool Results</p>
                 <div className="flex flex-wrap items-center gap-2">
                   {['+', '-', 'x', '!'].map((code) => (
@@ -491,7 +514,7 @@ const OsintHub = () => {
                     value={filterQuery}
                     onChange={(e) => setFilterQuery(e.target.value)}
                     placeholder="Filter situs..."
-                    className="rounded-xl border border-slate-800/60 bg-slate-900/40 px-3 py-1.5 text-xs text-slate-100 placeholder:text-slate-500"
+                    className="w-full rounded-xl border border-slate-800/60 bg-slate-900/40 px-3 py-1.5 text-xs text-slate-100 placeholder:text-slate-500 sm:w-auto sm:min-w-[180px]"
                   />
                   <button
                     type="button"
@@ -523,7 +546,7 @@ const OsintHub = () => {
                     uniq.push(e);
                   }
                   uniq.sort((a, b) => (order[a.code] - order[b.code]) || String(a.site).localeCompare(String(b.site)));
-                  const limit = expandedTools[tool.name] ? 200 : 50;
+                  const limit = expandedTools[tool.name] ? 200 : 20;
                   const sliced = uniq.slice(0, limit);
                   return (
                     <div key={tool.name} className="rounded-2xl border border-white/5 bg-white/5 p-4 text-sm text-slate-300">
@@ -536,25 +559,30 @@ const OsintHub = () => {
                           <span className="rounded-full border border-white/10 px-2 py-0.5">! {c['!'] || 0}</span>
                         </div>
                       </div>
-                      <ul className="max-h-60 space-y-1 overflow-auto pr-2 font-mono text-[12px]">
-                        {sliced.map((e, idx) => (
-                          <li key={`${tool.name}-${idx}`} className="flex items-center justify-between">
-                            <span
-                              className={`mr-2 rounded px-1 py-0.5 text-[10px] ${
-                                e.code === '+'
-                                  ? 'bg-emerald-500/20 text-emerald-200'
-                                  : e.code === '-'
-                                  ? 'bg-slate-500/20 text-slate-300'
-                                  : e.code === 'x'
-                                  ? 'bg-amber-500/20 text-amber-200'
-                                  : 'bg-rose-500/20 text-rose-200'
-                              }`}
-                            >
-                              {e.code}
-                            </span>
-                            <span className="truncate">{e.site}</span>
-                          </li>
-                        ))}
+                      <ul className="max-h-52 space-y-1 overflow-auto pr-2 font-mono text-[12px] sm:max-h-60">
+                        {sliced.map((e, idx) => {
+                          const rawSite = e.site || '';
+                          const cleanSite = rawSite.replace(/^URL:\\s*/i, '');
+                          const shortSite = cleanSite.length > 70 ? `${cleanSite.slice(0, 70)}…` : cleanSite;
+                          return (
+                            <li key={`${tool.name}-${idx}`} className="flex items-start justify-between gap-2">
+                              <span
+                                className={`mr-2 rounded px-1 py-0.5 text-[10px] ${
+                                  e.code === '+'
+                                    ? 'bg-emerald-500/20 text-emerald-200'
+                                    : e.code === '-'
+                                    ? 'bg-slate-500/20 text-slate-300'
+                                    : e.code === 'x'
+                                    ? 'bg-amber-500/20 text-amber-200'
+                                    : 'bg-rose-500/20 text-rose-200'
+                                }`}
+                              >
+                                {e.code}
+                              </span>
+                              <span className="break-words" title={cleanSite || undefined}>{shortSite}</span>
+                            </li>
+                          );
+                        })}
                         {sliced.length === 0 && (
                           <li className="text-slate-500">Tidak ada entri yang cocok dengan filter.</li>
                         )}

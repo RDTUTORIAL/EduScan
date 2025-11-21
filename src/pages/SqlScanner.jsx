@@ -134,21 +134,21 @@ const SqlScanner = () => {
 
   return (
     <motion.section
-      className="flex flex-col gap-6"
+      className="flex flex-col gap-6 min-w-0"
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
     >
-      <header className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/5 bg-gradient-to-r from-rose-900/40 via-slate-900/60 to-slate-900/60 p-6">
+      <header className="flex flex-col gap-4 rounded-2xl border border-white/5 bg-gradient-to-r from-rose-900/40 via-slate-900/60 to-slate-900/60 p-5 sm:p-6 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.4em] text-slate-500">Active Tool</p>
           <h2 className="text-2xl font-semibold text-white">SQLi Scanner</h2>
           <p className="text-sm text-slate-400">Kombinasi manual testing + Nuclei templates dengan payload preset.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button type="button" className="btn-secondary" onClick={handleClear}>
+        <div className="flex flex-wrap gap-3">
+          <button type="button" className="btn-secondary w-full sm:w-auto" onClick={handleClear}>
             Reset
           </button>
-          <button type="button" className="btn-primary" disabled={!isValid || scanning} onClick={handleScan}>
+          <button type="button" className="btn-primary w-full sm:w-auto" disabled={!isValid || scanning} onClick={handleScan}>
             <ShieldOff className="h-4 w-4" />
             Start Scan
           </button>
@@ -175,8 +175,8 @@ const SqlScanner = () => {
         </div>
       </ScanForm>
 
-      <div className="grid gap-6 lg:grid-cols-5">
-        <div className="space-y-6 lg:col-span-3">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5 min-w-0">
+        <div className="space-y-6 lg:col-span-3 min-w-0">
           <TerminalOutput logs={logs} status={scanning ? 'Scanning...' : result ? 'Done' : 'Ready'} />
           <ResultsTable
             title="Payload Matrix"
@@ -190,8 +190,10 @@ const SqlScanner = () => {
             emptyText="Belum ada payload dijalankan."
           />
         </div>
-        <div className="space-y-6 lg:col-span-2">
-          <RiskChart score={result?.risk_score ?? 0} label="SQL Injection Risk" />
+        <div className="space-y-6 lg:col-span-2 min-w-0">
+          <div className="glass-panel p-4 sm:p-6">
+            <RiskChart score={result?.risk_score ?? 0} label="SQL Injection Risk" />
+          </div>
           {severityMeta ? (
             <div className={`rounded-2xl border p-4 text-xs ${severityMeta.className}`}>
               <p className="text-sm font-semibold text-white">{severityMeta.label}</p>
@@ -202,8 +204,8 @@ const SqlScanner = () => {
               Belum ada informasi risiko. Jalankan pemindaian terlebih dahulu.
             </div>
           )}
-          <div className="glass-panel space-y-3 p-6">
-            <div className="flex items-center justify-between">
+          <div className="glass-panel space-y-3 p-4 sm:p-6">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <p className="text-sm font-semibold text-slate-200">Code Remediation</p>
               {result?.payload_type && (
                 <span className="rounded-full border border-cyan-400/30 bg-cyan-500/10 px-3 py-1 text-[10px] font-semibold uppercase tracking-wide text-cyan-200">
@@ -212,11 +214,11 @@ const SqlScanner = () => {
               )}
             </div>
             <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-4 text-xs font-mono text-rose-100">
+              <div className="rounded-xl border border-rose-500/20 bg-rose-500/5 p-4 text-xs font-mono text-rose-100 break-words">
                 <p className="mb-2 font-semibold text-rose-200">Before</p>
                 <pre className="whitespace-pre-wrap break-words">{result?.diff_original || "SELECT * FROM users WHERE id = '1';"}</pre>
               </div>
-              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-xs font-mono text-emerald-100">
+              <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4 text-xs font-mono text-emerald-100 break-words">
                 <p className="mb-2 font-semibold text-emerald-200">After</p>
                 <pre className="whitespace-pre-wrap break-words">{result?.diff_patched || 'db.prepare("SELECT * FROM users WHERE id = ?")'}</pre>
               </div>

@@ -65,18 +65,18 @@ const HeaderAnalyzer = () => {
   ];
 
   return (
-    <motion.section className="flex flex-col gap-6" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-      <header className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/5 bg-gradient-to-r from-cyan-900/40 to-slate-900/60 p-6">
+    <motion.section className="flex flex-col gap-6 min-w-0" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+      <header className="flex flex-col gap-4 rounded-2xl border border-white/5 bg-gradient-to-r from-cyan-900/40 to-slate-900/60 p-5 sm:p-6 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.4em] text-slate-500">Active Tool</p>
           <h2 className="text-2xl font-semibold text-white">Header Analyzer</h2>
           <p className="text-sm text-slate-400">Evaluasi CSP, HSTS, referrer, dan header keamanan lainnya.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button type="button" className="btn-secondary" onClick={handleClear}>
+        <div className="flex flex-wrap gap-3">
+          <button type="button" className="btn-secondary w-full sm:w-auto" onClick={handleClear}>
             Clear
           </button>
-          <button type="button" className="btn-primary" disabled={!isValid || scanning} onClick={handleScan}>
+          <button type="button" className="btn-primary w-full sm:w-auto" disabled={!isValid || scanning} onClick={handleScan}>
             <Network className="h-4 w-4" />
             Start Scan
           </button>
@@ -107,8 +107,8 @@ const HeaderAnalyzer = () => {
         </div>
       </ScanForm>
 
-      <div className="grid gap-6 lg:grid-cols-5">
-        <div className="space-y-6 lg:col-span-3">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5 min-w-0">
+        <div className="space-y-6 lg:col-span-3 min-w-0">
           <TerminalOutput logs={logs} status={scanning ? 'Scanning...' : result ? 'Done' : 'Ready'} />
           <ResultsTable
             title="Security Headers Analysis"
@@ -160,12 +160,14 @@ const HeaderAnalyzer = () => {
             emptyText="Belum ada header dianalisis."
           />
         </div>
-        <div className="space-y-6 lg:col-span-2">
-          <RiskChart score={result?.risk_score || 0} label="Security Risk" />
+        <div className="space-y-6 lg:col-span-2 min-w-0">
+          <div className="glass-panel p-4 sm:p-6">
+            <RiskChart score={result?.risk_score || 0} label="Security Risk" />
+          </div>
           
           {/* Security Level Indicator */}
           {result && (
-            <div className="glass-panel p-6">
+            <div className="glass-panel p-4 sm:p-6 min-w-0">
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-slate-400">Security Level</span>
@@ -206,7 +208,7 @@ const HeaderAnalyzer = () => {
           )}
           
           {/* Insights Panel */}
-          <div className="glass-panel space-y-3 p-6 text-sm text-slate-300">
+          <div className="glass-panel space-y-3 p-4 sm:p-6 text-sm text-slate-300 min-w-0">
             <p className="font-semibold text-slate-100">Analysis Insights</p>
             <p>
               {result?.tool_note || 'Run a header scan to get security analysis and recommendations.'}
@@ -218,7 +220,7 @@ const HeaderAnalyzer = () => {
           
           {/* Logs Panel */}
           {result?.logs && result.logs.length > 0 && (
-            <div className="glass-panel p-6">
+            <div className="glass-panel p-4 sm:p-6 min-w-0">
               <p className="font-semibold text-slate-100 mb-3 text-sm">Scan Logs</p>
               <div className="space-y-1 max-h-32 overflow-y-auto">
                 {result.logs.slice(-5).map((log, idx) => (

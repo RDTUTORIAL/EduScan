@@ -63,24 +63,24 @@ const XssScanner = () => {
   const tableData = (result?.findings || []).map((f, idx) => ({ id: idx, ...f }));
 
   return (
-    <motion.section className="flex flex-col gap-6" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-      <header className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-white/5 bg-gradient-to-r from-amber-900/40 to-slate-900/60 p-6">
+    <motion.section className="flex flex-col gap-6 min-w-0" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
+      <header className="flex flex-col gap-4 rounded-2xl border border-white/5 bg-gradient-to-r from-amber-900/40 to-slate-900/60 p-5 sm:p-6 md:flex-row md:items-center md:justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.4em] text-slate-500">Active Tool</p>
           <h2 className="text-2xl font-semibold text-white">XSS Scanner</h2>
           <p className="text-sm text-slate-400">Kombinasi Dalfox + Nuclei. Tabel hasil seperti SQLi.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button type="button" className="btn-secondary" onClick={handleClear}>
+        <div className="flex flex-wrap gap-3">
+          <button type="button" className="btn-secondary w-full sm:w-auto" onClick={handleClear}>
             Clear
           </button>
-          <button type="button" className="btn-primary" disabled={!formData.url.trim() || scanning} onClick={handleScan}>
+          <button type="button" className="btn-primary w-full sm:w-auto" disabled={!formData.url.trim() || scanning} onClick={handleScan}>
             <TestTube2 className="h-4 w-4" />
             Run Scan
           </button>
           <button
             type="button"
-            className="btn-secondary"
+            className="btn-secondary w-full sm:w-auto"
             disabled={!result}
             onClick={() => result && exportToJson(result, 'xss-report.json')}
           >
@@ -100,8 +100,8 @@ const XssScanner = () => {
         </div>
       </ScanForm>
 
-      <div className="grid gap-6 lg:grid-cols-5">
-        <div className="space-y-6 lg:col-span-3">
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-5 min-w-0">
+        <div className="space-y-6 lg:col-span-3 min-w-0">
           <TerminalOutput logs={logs} status={scanning ? 'Scanning...' : result ? 'Done' : 'Ready'} />
           <ResultsTable
             title="XSS Findings (Dalfox + Nuclei)"
@@ -118,7 +118,7 @@ const XssScanner = () => {
             emptyText="Belum ada temuan."
           />
           {result?.recommendation && (
-            <div className="glass-panel space-y-2 p-6 text-xs text-slate-400">
+            <div className="glass-panel space-y-2 p-4 sm:p-6 text-xs text-slate-400 break-words">
               <p className="text-sm font-semibold text-slate-200">Ringkasan</p>
               <p>{result?.detection}</p>
               <p className="font-semibold text-slate-100">Rekomendasi</p>
@@ -126,8 +126,10 @@ const XssScanner = () => {
             </div>
           )}
         </div>
-        <div className="space-y-6 lg:col-span-2">
-          <RiskChart score={result?.risk_score ?? 0} label="XSS Risk" />
+        <div className="space-y-6 lg:col-span-2 min-w-0">
+          <div className="glass-panel p-4 sm:p-6">
+            <RiskChart score={result?.risk_score ?? 0} label="XSS Risk" />
+          </div>
         </div>
       </div>
     </motion.section>

@@ -12,6 +12,9 @@ import {
   History as HistoryIcon,
   Settings as SettingsIcon,
   MessageCircle,
+  Menu,
+  Sun,
+  Moon,
 } from 'lucide-react';
 import Sidebar from './components/Sidebar';
 import BottomBar from './components/BottomBar';
@@ -163,10 +166,39 @@ const App = () => {
 
   return (
     <ScanContext.Provider value={providerValue}>
-      <div className="flex min-h-screen bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+      <div className="flex min-h-screen overflow-x-hidden bg-slate-100 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
         <Sidebar routes={NAV_ITEMS} mobileOpen={mobileOpen} onToggle={() => setMobileOpen((prev) => !prev)} />
-        <div className="flex min-h-screen flex-1 flex-col bg-gradient-to-b from-slate-950 via-slate-950 to-slate-900 px-6 pb-6 pt-6 md:ml-72">
-          <main className="flex-1 overflow-x-hidden">
+        <div className="flex min-h-screen min-w-0 flex-1 flex-col bg-gradient-to-b from-slate-100 via-white to-slate-200 px-4 pb-14 pt-3 text-slate-900 transition-colors duration-300 dark:from-slate-950 dark:via-slate-950 dark:to-slate-900 dark:text-slate-100 sm:px-5 md:ml-72 md:px-6 md:pb-6 md:pt-6">
+          <div className="sticky top-0 z-20 mb-4 flex items-center justify-between rounded-2xl border border-slate-800/70 bg-slate-900/85 px-3 py-2.5 shadow-xl shadow-black/30 backdrop-blur md:hidden">
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-800/80 bg-slate-900/70 text-slate-200 shadow-lg shadow-black/20"
+                onClick={() => setMobileOpen((prev) => !prev)}
+                aria-label="Open navigation"
+              >
+                <Menu className="h-4.5 w-4.5" />
+              </button>
+              <div className="leading-tight">
+                <p className="text-[10px] uppercase tracking-[0.28em] text-slate-500">EduScan</p>
+                <p className="text-[13px] font-semibold text-white">Cyber Range</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="hidden"
+                onClick={toggleTheme}
+                aria-label="Toggle dark mode"
+              >
+                {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </button>
+              <span className="rounded-full border border-slate-800/60 bg-slate-900/60 px-2.5 py-1 text-[10px] font-semibold text-slate-400">
+                {status}
+              </span>
+            </div>
+          </div>
+          <main className="flex-1 min-w-0 overflow-x-hidden">
             <Routes>
               {routesWithComponents.map((route) => (
                 <Route key={route.path} path={route.path} element={route.element} />
