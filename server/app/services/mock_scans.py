@@ -1,12 +1,3 @@
-"""
-Lightweight analysis helpers for EduScan backend.
-
-The functions in this module perform real network/file heuristics (no randomness) so
-results are derived from actual targets when the API is invoked. Most routines rely
-on Python's stdlib (socket/ssl) and `httpx` for HTTP probing, making them portable
-without requiring heavy external binaries. When a target is unreachable the
-functions fall back to informative errors rather than fabricating pseudo data.
-"""
 
 from __future__ import annotations
 
@@ -34,14 +25,10 @@ PayloadResult = Literal["Vulnerable", "Likely Safe"]
 
 HTTP_TIMEOUT = 6.0
 TCP_TIMEOUT = 1.3
-# Optional local templates directory (in-repo). Primary scan uses nuclei-templates via `-tags sqli`.
 SQLI_TEMPLATE_DIR = Path(__file__).resolve().parent / "nuclei-templates/dast/vulnerabilities/" / "sqli"
-# Local nuclei XSS templates directory
 XSS_TEMPLATE_DIR = Path(__file__).resolve().parent / "nuclei-templates/dast/vulnerabilities/" / "xss"
-# Nuclei HTTP templates directory (prefer absolute path provided by user)
 HTTP_TEMPLATE_DIR_ABS = Path("/home/jack/Desktop/lomba/server/app/services/nuclei-templates/http")
 HTTP_TEMPLATE_DIR_REL = Path(__file__).resolve().parent / "nuclei-templates" / "http"
-# Where to persist last nuclei raw output for debugging
 NUCLEI_RESPON_PATH = Path(__file__).resolve().parent / "respon.json"
 NUCLEI_TEXT_PATTERN = re.compile(
     r"\[(?P<template>[^\]]+)\]\s+\[(?P<protocol>[^\]]+)\]\s+\[(?P<severity>[^\]]+)\]\s+(?P<target>\S+)"
@@ -149,7 +136,7 @@ HEADER_SCORING = {
     "cross-origin-resource-policy": {"weight": 8, "critical": False},
 }
 
-# Fallback mini wordlist jika file wordlist belum tersedia
+
 DIRECTORY_WORDLIST = [
     "/admin",
     "/.git/",
@@ -163,7 +150,7 @@ DIRECTORY_WORDLIST = [
     "/old",
 ]
 
-# Lokasi folder wordlist kustom untuk ffuf
+
 WORDLIST_DIR = Path(__file__).resolve().parent / "wordlist"
 
 FFUF_MATCH_CODES = {
@@ -196,11 +183,11 @@ def _resolve_wordlist(name: str) -> Path | None:
     target = _normalize_name(name)
     if not WORDLIST_DIR.exists():
         return None
-    # exact
+    
     exact = WORDLIST_DIR / f"{name}.txt"
     if exact.exists():
         return exact
-    # scan candidates
+    
     for file in WORDLIST_DIR.glob("*.txt"):
         stem = _normalize_name(file.stem)
         if stem == target or stem.startswith(target):
@@ -228,10 +215,10 @@ def _run_ffuf(url: str, wordlist_path: Path, timeout: int = 600) -> Tuple[List[D
     Menghasilkan list entries dengan bentuk yang konsisten: path, status, size.
     """
     _ensure_tool("ffuf")
-    # Pastikan target di-root domain agar respon tidak bias 200 dari endpoint tertentu
+    
     base = _origin_root(url)
     target = base.rstrip("/") + "/FUZZ"
-    # ffuf menulis JSON ke file; gunakan tempfile agar mudah dibaca
+    
     with tempfile.NamedTemporaryFile("w+b", delete=False) as tmp:
         out_path = Path(tmp.name)
     cmd = [
@@ -248,12 +235,12 @@ def _run_ffuf(url: str, wordlist_path: Path, timeout: int = 600) -> Tuple[List[D
         "80",
         "-c",
         "-noninteractive",
-        # Filter out 404 agar output fokus ke temuan
+        
         "-fc",
         "404",
     ]
     exit_code, stdout, stderr = _run_command(cmd, timeout=timeout)
-    # ffuf mengembalikan exitcode 0 meski tidak ada hasil. Pastikan file ada.
+    
     entries: List[Dict] = []
     notes: List[str] = []
     code_counts: Dict[str, int] = {}
@@ -262,7 +249,7 @@ def _run_ffuf(url: str, wordlist_path: Path, timeout: int = 600) -> Tuple[List[D
             data = json.loads(out_path.read_text(encoding="utf-8") or "{}")
             for item in data.get("results", []):
                 status = int(item.get("status", 0))
-                # hanya status menarik
+                
                 if status not in FFUF_MATCH_CODES:
                     continue
                 fuzz_val = None
@@ -287,9 +274,9 @@ def _run_ffuf(url: str, wordlist_path: Path, timeout: int = 600) -> Tuple[List[D
         "target": target,
         "wordlist": str(wordlist_path),
         "status_counts": code_counts,
-        "entries": entries,  # lampirkan untuk kebutuhan spider
+        "entries": entries,  
     }
-    # Jika ffuf gagal total, naikkan error agar caller bisa fallback
+    
     if exit_code != 0 and not entries:
         raise RuntimeError(f"FFUF gagal: {stderr or stdout or 'tidak ada output'}")
     return entries, status_obj
@@ -389,7 +376,7 @@ def _flatten_obj(obj: Any, prefix: str = "") -> Dict[str, Any]:
             if isinstance(v, (str, int, float, bool)) or v is None:
                 flat[key] = v
             elif isinstance(v, (list, tuple)):
-                # stringify simple list
+                
                 try:
                     flat[key] = ", ".join(str(x) for x in v)
                 except Exception:
@@ -409,11 +396,11 @@ def _run_truecaller(number: str, cookie: Optional[str]) -> Tuple[Dict, Dict]:
     tool_name = "truecaller-web"
     if not cookie:
         return {}, {"name": tool_name, "status": "skipped", "notes": "cookie tidak disediakan"}
-    # Normalize to components
+    
     digits = re.sub(r"\D", "", str(number))
     if not digits or len(digits) < 6:
         return {}, {"name": tool_name, "status": "error", "notes": "nomor tidak valid"}
-    # Heuristic split: try 1-3 digits cc, rest subscriber; prefer 2 for ID (62)
+    
     cc = digits[:2]
     subscriber = digits[2:]
     if cc not in {"62", "44", "1"} and len(digits) >= 10:
@@ -440,7 +427,7 @@ def _run_truecaller(number: str, cookie: Optional[str]) -> Tuple[Dict, Dict]:
     if res.status_code != 200:
         return {}, {"name": tool_name, "status": "error", "notes": f"status {res.status_code}"}
     html = res.text or ""
-    # Extract Next.js data blob
+    
     m = re.search(r"<script id=\"__NEXT_DATA__\" type=\"application/json\">(.*?)</script>", html, re.S)
     entries: List[Dict[str, str]] = []
     details: Dict[str, Any] = {}
@@ -473,8 +460,8 @@ def _run_truecaller(number: str, cookie: Optional[str]) -> Tuple[Dict, Dict]:
                 if any(t.lower() in low for t in target_keys):
                     val = v if not isinstance(v, (list, dict)) else json.dumps(v, ensure_ascii=False)
                     entries.append({"site": f"{k}: {val}", "code": "+"})
-            # Build compact details from a few likely keys
-            # Prefer the first matching keys
+            
+            
             def _pick(key_parts: List[str]) -> Optional[str]:
                 for fk, fv in flat.items():
                     lk = fk.lower()
@@ -493,9 +480,9 @@ def _run_truecaller(number: str, cookie: Optional[str]) -> Tuple[Dict, Dict]:
             }
         except Exception:
             pass
-    # Fallback: parse key fields from visible HTML when JSON not available
+    
     if not entries:
-        # Extract name element like: div.flex-none.font-bold.break-all.sm:text-xl
+        
         name_match = re.search(
             r"<div[^>]*class=\"[^\"]*(?:flex-none)[^\"]*(?:font-bold)[^\"]*(?:break-all)[^\"]*(?:sm:text-xl)[^\"]*\"[^>]*>(.*?)</div>",
             html,
@@ -503,7 +490,7 @@ def _run_truecaller(number: str, cookie: Optional[str]) -> Tuple[Dict, Dict]:
         )
         if name_match:
             raw = name_match.group(1)
-            # strip inner tags
+            
             clean = re.sub(r"<[^>]+>", "", raw).strip()
             if clean:
                 entries.append({"site": f"name: {clean}", "code": "+"})
@@ -523,8 +510,8 @@ def _run_truecaller_bs4(subscriber: str, cookie: Optional[str]) -> Tuple[Dict, D
     if not cookie:
         return {}, {"name": "truecaller", "status": "skipped", "notes": "cookie tidak disediakan"}
     try:
-        # Local import to avoid side effects at module import time
-        from .true import truecaller_scrape  # type: ignore
+        
+        from .true import truecaller_scrape  
     except Exception as exc:
         return {}, {"name": "truecaller", "status": "skipped", "notes": f"modul true.py tidak tersedia: {exc}"}
     try:
@@ -570,7 +557,7 @@ def _run_whois(domain: str) -> Tuple[Dict, Dict]:
     country = None
     domain_name = None
     for raw in lines:
-        if not raw or raw.startswith(('%', '#')) or raw.strip().startswith('>>>'):
+        if not raw or raw.startswith(('%', '
             continue
         m = WHOIS_KV.match(raw)
         if not m:
@@ -580,7 +567,7 @@ def _run_whois(domain: str) -> Tuple[Dict, Dict]:
         if 'domain name' in k and not domain_name:
             domain_name = v
         elif 'registrar' == k or k.endswith('registrar'):
-            # Skip lines like Registrar IANA ID
+            
             if 'iana' in k:
                 pass
             else:
@@ -615,7 +602,7 @@ def _run_whois(domain: str) -> Tuple[Dict, Dict]:
         details['country'] = country
     if domain_name:
         details['domain'] = domain_name
-    # Build entries for UI
+    
     entries: List[Dict[str, str]] = []
     for key in [
         'domain', 'registrar', 'created', 'updated', 'expires', 'country']:
@@ -637,7 +624,7 @@ def _run_whois(domain: str) -> Tuple[Dict, Dict]:
 def _run_holehe(email: str) -> Tuple[Dict, Dict]:
     if shutil.which("holehe") is None:
         return {}, {"name": "holehe", "status": "skipped", "notes": "holehe tidak terpasang"}
-    # Use simplified invocation compatible with common installs: `holehe <email>`
+    
     cmd = ["holehe", email]
     code, out, err = _run_command(cmd)
     if code != 0 and not out.strip():
@@ -653,15 +640,15 @@ def _run_holehe(email: str) -> Tuple[Dict, Dict]:
 def _run_ignorant(identifier: str) -> Tuple[Dict, Dict]:
     if shutil.which("ignorant") is None:
         return {}, {"name": "ignorant", "status": "skipped", "notes": "ignorant tidak terpasang"}
-    # Support username OR phone style: `ignorant 62 87856053716`
-    # If looks like a phone, split into country code and subscriber number (digits only for subscriber)
+    
+    
     phone_match = re.match(r"^\+?(\d{1,3})\s*([0-9\s-]{5,})$", identifier.strip())
     if phone_match:
         cc = phone_match.group(1)
         subscriber = re.sub(r"\D", "", phone_match.group(2))
         cmd = ["ignorant", cc, subscriber]
     else:
-        # Fallback: username mode `ignorant <username>`
+        
         cmd = ["ignorant", identifier]
     code, out, err = _run_command(cmd)
     if code != 0 and not out.strip():
@@ -682,7 +669,7 @@ def _run_phoneinfoga(number: str) -> Tuple[Dict, Dict]:
     """
     if shutil.which("phoneinfoga") is None:
         return {}, {"name": "phoneinfoga", "status": "skipped", "notes": "phoneinfoga tidak terpasang"}
-    # Prefer JSON (-J) if supported
+    
     cmd = ["phoneinfoga", "scan", "-n", number, "-J"]
     code, out, err = _run_command(cmd)
     if code != 0 or not out.strip():
@@ -690,7 +677,7 @@ def _run_phoneinfoga(number: str) -> Tuple[Dict, Dict]:
         code, out, err = _run_command(cmd)
         if code != 0 and not out.strip():
             return {}, {"name": "phoneinfoga", "status": "error", "notes": err or "no output"}
-        # Try simple key: value parsing
+        
         kv_re = re.compile(r"^\s*([A-Za-z][A-Za-z0-9 _\-/]+)\s*[:=]\s*(.+)$")
         entries = []
         for line in out.splitlines():
@@ -705,11 +692,11 @@ def _run_phoneinfoga(number: str) -> Tuple[Dict, Dict]:
             {"found": len(entries), "counts": counts, "entries": entries[:200]},
             {"name": "phoneinfoga", "status": "completed", "notes": f"{len(entries)} info"},
         )
-    # JSON path
+    
     entries = []
     try:
         data = json.loads(out)
-        # Normalize into key-value pairs (flatten shallow fields)
+        
         def _flatten(obj, prefix: str = ""):
             flat = {}
             if isinstance(obj, dict):
@@ -742,7 +729,7 @@ def _run_phonenumbers_local(number: str) -> Tuple[Dict, Dict]:
     Returns entries as "+" code facts and a structured dict under "details".
     """
     try:
-        import phonenumbers  # type: ignore
+        import phonenumbers  
         from phonenumbers import carrier as _pn_carrier, geocoder as _pn_geocoder, timezone as _pn_tz
     except Exception:
         return {}, {"name": "phonenumbers", "status": "skipped", "notes": "phonenumbers tidak terpasang"}
@@ -816,7 +803,7 @@ def _run_nuclei(
             continue
         try:
             data = json.loads(line)
-            # Capture a compact JSON sample for debugging
+            
             try:
                 compact = json.dumps(
                     {
@@ -846,9 +833,9 @@ def _run_nuclei(
                 hits.append({"raw": line})
             continue
         info = data.get("info", {})
-        # Be robust across nuclei versions: severity may be at top-level or under info
+        
         severity_val = _norm_sev((info.get("severity") or data.get("severity")))
-        # Attempt to infer method from nuclei record
+        
         method_val = data.get("fuzzing_method")
         if not method_val:
             req = data.get("request") or ""
@@ -869,9 +856,9 @@ def _run_nuclei(
         )
     status = {"name": "Nuclei", "status": "completed", "notes": f"{len(hits)} temuan"}
     log_lines = [line for line in stderr.splitlines() if line.strip()]
-    # Append a few JSON samples to logs for debugging (max 15 lines)
+    
     log_lines.extend(json_samples[:15])
-    # Save raw nuclei output and parsed hits for debugging into respon.json
+    
     try:
         payload_dump = {
             "timestamp": datetime.utcnow().isoformat(),
@@ -919,11 +906,11 @@ def _run_dirb(url: str) -> Tuple[List[Dict], Dict[str, str]]:
 
     Prefer ffuf (lebih cepat), fallback ke dirb klasik jika ffuf/wordlist tidak tersedia.
     """
-    # Coba gunakan ffuf dengan wordlist 'admin' jika tersedia
+    
     wl = _resolve_wordlist("admin")
     if shutil.which("ffuf") and wl:
         entries, status_obj = _run_ffuf(url, wl)
-        # Konversi menjadi temuan untuk SurfaceAuditor
+        
         findings = [
             {
                 "title": url.rstrip("/") + entry["path"],
@@ -938,7 +925,7 @@ def _run_dirb(url: str) -> Tuple[List[Dict], Dict[str, str]]:
         status_obj["notes"] = f"{len(findings)} temuan"
         return findings, status_obj
 
-    # Fallback ke dirb mini (bawaan) agar tetap ada hasil
+    
     _ensure_tool("dirb")
     target = url if url.endswith("/") else f"{url.rstrip('/')}/"
     tmp_path = None
@@ -1038,8 +1025,8 @@ def _run_nmap_port_scan(host: str, ports: Sequence[Dict]) -> Tuple[List[Dict], D
     port_list = ",".join(str(p["port"]) for p in ports)
     cmd = [
         "nmap",
-        "-Pn",              # jangan ping dulu
-        "-sS",              # TCP SYN scan
+        "-Pn",              
+        "-sS",              
         "-p",
         port_list,
         "--max-retries",
@@ -1047,7 +1034,7 @@ def _run_nmap_port_scan(host: str, ports: Sequence[Dict]) -> Tuple[List[Dict], D
         "--host-timeout",
         "15s",
         "-oG",
-        "-",                # grepable output ke stdout
+        "-",                
         host,
     ]
     exit_code, stdout, stderr = _run_command(cmd, timeout=25)
@@ -1060,7 +1047,7 @@ def _run_nmap_port_scan(host: str, ports: Sequence[Dict]) -> Tuple[List[Dict], D
     for line in stdout.splitlines():
         if "Ports:" not in line:
             continue
-        # Contoh format: Host: 127.0.0.1 ()  Ports: 22/open/tcp//ssh///, 80/closed/tcp//http///
+        
         try:
             ports_part = line.split("Ports:")[1].strip()
         except Exception:
@@ -1091,7 +1078,7 @@ def _run_nmap_port_scan(host: str, ports: Sequence[Dict]) -> Tuple[List[Dict], D
                     "port": port_num,
                     "service": service,
                     "status": status_norm,
-                    "version": proto,  # tidak ada banner, tampilkan proto
+                    "version": proto,  
                     "latency": None,
                 }
             )
@@ -1174,7 +1161,7 @@ def generate_port_scan(payload: Dict) -> Dict:
         ports = candidates or SERVICE_PORTS
     else:
         ports = SERVICE_PORTS
-    # Coba pakai nmap jika tersedia untuk hasil lebih akurat; fallback ke socket scan
+    
     table: List[Dict]
     summary: Dict[str, int]
     command_used = None
@@ -1224,7 +1211,7 @@ def generate_port_scan(payload: Dict) -> Dict:
 
 def _prepare_request(url: str, parameter: str) -> Tuple[str, Dict[str, str]]:
     parsed = urlsplit(url)
-    # Normalize query to avoid odd forms like "/param=/1" turning into invalid URLs.
+    
     pairs = parse_qsl(parsed.query, keep_blank_values=True)
     normalized: List[Tuple[str, str]] = []
     seen: set[str] = set()
@@ -1334,20 +1321,20 @@ def generate_sql_scan(payload: Dict) -> Dict:
     param_name = payload.get("parameter") or "id"
     payload_type = payload.get("payload_type", "error")
     fuzz_payloads = SQLI_PAYLOADS.get(payload_type, SQLI_PAYLOADS["error"])
-    # Auto-select parameter from URL query if provided parameter not present
+    
     parsed_for_param = urlsplit(url)
     existing_params = dict(parse_qsl(parsed_for_param.query, keep_blank_values=True))
     auto_selected = False
     chosen_param = param_name
     if existing_params and param_name not in existing_params:
         chosen_param = next(iter(existing_params.keys()))
-    # sanitize chosen param to avoid leading '/'
+    
     if chosen_param.startswith('/'):
         chosen_param = chosen_param.lstrip('/')
         auto_selected = True
     base_url, base_params, mutations = _build_sqli_mutations(url, chosen_param, fuzz_payloads)
 
-    # Preflight: ensure target is reachable; if not, return a clear, FE-friendly response
+    
     try:
         baseline_resp = _preflight_http(base_url, base_params)
         baseline = {"status": baseline_resp.status_code, "length": len(baseline_resp.text)}
@@ -1378,7 +1365,7 @@ def generate_sql_scan(payload: Dict) -> Dict:
 
     manual_rows, manual_stats = _probe_sql_payloads(base_url, baseline, mutations, payload_type)
     mutated_targets_all = [mutation["url"] for mutation in mutations] or [url]
-    # Dedupe nuclei targets to avoid payload looping on identical URLs
+    
     seen_targets: set[str] = set()
     mutated_targets: List[str] = []
     for t in mutated_targets_all:
@@ -1388,9 +1375,9 @@ def generate_sql_scan(payload: Dict) -> Dict:
     findings: List[Dict] = []
     nuclei_logs: List[str] = []
     executed_cmds: List[str] = []
-    # Run nuclei only for relevant payload types (skip for 'union' since no template matches)
+    
     if payload_type != "union":
-        # Primary: installed nuclei-templates via tags sqli (covers time-based, etc.)
+        
         try:
             builtin_findings, _status1, logs1 = _run_nuclei(url, ["-tags", "sqli"], target_list=mutated_targets)
             findings.extend(builtin_findings)
@@ -1399,7 +1386,7 @@ def generate_sql_scan(payload: Dict) -> Dict:
         except RuntimeError as exc:
             nuclei_logs.append(f"[WRN] Nuclei '-tags sqli' gagal: {exc}")
 
-        # Secondary: if custom local templates exist, run them too and merge
+        
         if SQLI_TEMPLATE_DIR.exists():
             try:
                 extra_findings, _status2, logs2 = _run_nuclei(url, ["-t", str(SQLI_TEMPLATE_DIR)], target_list=mutated_targets)
@@ -1419,7 +1406,7 @@ def generate_sql_scan(payload: Dict) -> Dict:
     severity_score = {"info": 10, "low": 20, "medium": 55, "high": 80, "critical": 95}
     highest_index = 0
     rows: List[Dict[str, str]] = list(manual_rows)
-    # Filter nuclei findings sesuai preset (error-based vs time-based/blind)
+    
     def _match_preset(item: Dict[str, str]) -> bool:
         if payload_type == "union":
             return False
@@ -1434,7 +1421,7 @@ def generate_sql_scan(payload: Dict) -> Dict:
             return any(k in text for k in keys)
         return True
 
-    # Deduplicate nuclei findings by evidence or title to avoid repeated rows
+    
     seen_evidence: set[str] = set()
     for item in findings:
         if not _match_preset(item):
@@ -1504,7 +1491,7 @@ def generate_sql_scan(payload: Dict) -> Dict:
         log_lines.append(f"[INF] Nuclei menemukan {len(findings)} temuan (maks severity {severity_order[highest_index]}).")
     if risk_score == 0:
         log_lines.append("[INF] Tidak ada indikasi SQL injection dari payload yang diuji.")
-    # Add command previews and parameter selection note
+    
     for cmd in executed_cmds:
         log_lines.append(f"[CMD] {cmd}")
     if auto_selected:
@@ -1539,7 +1526,7 @@ def generate_xss_scan(payload: Dict) -> Dict:
     dalfox_count = 0
     nuclei_count = 0
 
-    # 1) Dalfox (best-in-class for XSS)
+    
     try:
         if shutil.which("dalfox") is None:
             raise RuntimeError("Tool 'dalfox' tidak ditemukan di PATH")
@@ -1549,7 +1536,7 @@ def generate_xss_scan(payload: Dict) -> Dict:
             raise RuntimeError(f"Dalfox gagal: {stderr or 'tidak ada output'}")
         raw = stdout.strip()
         parsed_items: List[dict] = []
-        # Dalfox sometimes outputs JSON array; handle both array and JSONL
+        
         if raw.startswith('['):
             try:
                 arr = json.loads(raw)
@@ -1566,7 +1553,7 @@ def generate_xss_scan(payload: Dict) -> Dict:
                     data = json.loads(text)
                     parsed_items.append(data)
                 except json.JSONDecodeError:
-                    # keep raw line for context
+                    
                     all_findings.append({"raw": text, "source": "Dalfox"})
         for data in parsed_items:
             all_findings.append(
@@ -1584,32 +1571,32 @@ def generate_xss_scan(payload: Dict) -> Dict:
             )
         dalfox_count = sum(1 for f in all_findings if f.get("source") == "Dalfox")
     except Exception as exc:
-        # Non-fatal; we still try nuclei
+        
         all_findings.append({
             "type": "Dalfox",
             "raw": f"Skipped/failed: {exc}",
             "source": "Dalfox",
         })
 
-    # 2) Nuclei with local XSS templates
+    
     nuclei_hits: List[Dict] = []
     try:
         if XSS_TEMPLATE_DIR.exists():
             hits, _status, logs = _run_nuclei(target_url, ["-t", str(XSS_TEMPLATE_DIR)])
             nuclei_hits = hits
         else:
-            # fallback to tags if template dir missing
+            
             hits, _status, logs = _run_nuclei(target_url, ["-tags", "xss"])
             nuclei_hits = hits
     except Exception as exc:
-        # Don't fail the entire request; record diagnostic as a pseudo finding
+        
         all_findings.append({
             "type": "Nuclei",
             "raw": f"Skipped/failed: {exc}",
             "source": "Nuclei",
         })
 
-    # Map nuclei hits to UI-friendly schema and merge
+    
     for hit in nuclei_hits:
         title = hit.get("title") or hit.get("vector") or "xss"
         severity = (hit.get("severity") or "info").lower()
@@ -1629,7 +1616,7 @@ def generate_xss_scan(payload: Dict) -> Dict:
         )
     nuclei_count = sum(1 for f in all_findings if f.get("source") == "Nuclei" and not f.get("raw", "").startswith("Skipped/failed"))
 
-    # Deduplicate by evidence/type pair to avoid clutter
+    
     deduped: List[Dict[str, str]] = []
     seen_keys = set()
     for f in all_findings:
@@ -1639,7 +1626,7 @@ def generate_xss_scan(payload: Dict) -> Dict:
         seen_keys.add(key)
         deduped.append(f)
 
-    # Risk scoring: combine count with worst nuclei severity
+    
     severity_order = ["info", "low", "medium", "high", "critical"]
     severity_score = {"info": 5, "low": 10, "medium": 20, "high": 35, "critical": 55}
     worst_idx = 0
@@ -1688,11 +1675,11 @@ def _run_nmap_http_headers(url: str) -> Tuple[Dict[str, str], List[str]]:
         if not host:
             return {}, ["Invalid URL format"]
         
-        # Check if nmap is available
+        
         if shutil.which("nmap") is None:
             return {}, ["nmap not available - using basic HTTP analysis"]
         
-        # Run nmap with http-security-headers NSE script
+        
         cmd = [
             "nmap", "-sS", "-Pn", 
             "--script", "http-security-headers,http-headers,http-methods",
@@ -1709,7 +1696,7 @@ def _run_nmap_http_headers(url: str) -> Tuple[Dict[str, str], List[str]]:
         if exit_code == 0:
             logs.append(f"nmap scan completed for {host}:{port}")
             
-            # Parse nmap output for header information
+            
             in_headers = False
             current_header = None
             
@@ -1726,7 +1713,7 @@ def _run_nmap_http_headers(url: str) -> Tuple[Dict[str, str], List[str]]:
                 elif in_headers and not line.startswith("|"):
                     in_headers = False
                     
-                # Also capture general HTTP headers
+                
                 if "http-headers:" in line:
                     in_headers = True
                     continue
@@ -1749,7 +1736,7 @@ def _analyze_header_value(header: str, value: str) -> Tuple[str, str, List[str]]
         if not value:
             return "Missing", "critical", ["CSP not implemented - vulnerable to XSS attacks"]
         
-        # Basic CSP analysis
+        
         csp_lower = value.lower()
         if "'unsafe-eval'" in csp_lower:
             issues.append("unsafe-eval directive allows code execution")
@@ -1769,12 +1756,12 @@ def _analyze_header_value(header: str, value: str) -> Tuple[str, str, List[str]]
         if "max-age" not in hsts_lower:
             issues.append("max-age directive missing")
         else:
-            # Extract max-age value
+            
             import re
             age_match = re.search(r'max-age=(\d+)', hsts_lower)
             if age_match:
                 max_age = int(age_match.group(1))
-                if max_age < 31536000:  # 1 year
+                if max_age < 31536000:  
                     issues.append(f"max-age too short: {max_age}s (recommended: 31536000s)")
         
         if "includesubdomains" not in hsts_lower:
@@ -1826,7 +1813,7 @@ def _analyze_header_value(header: str, value: str) -> Tuple[str, str, List[str]]
             return value, "weak", ["Non-standard XSS protection value"]
             
     else:
-        # Generic header analysis
+        
         if not value:
             return "Missing", "low", []
         return "Present", "good", []
@@ -1837,15 +1824,15 @@ def generate_header_scan(url: str) -> Dict:
     logs = []
     
     try:
-        # Basic HTTP header fetch
+        
         response = _fetch_headers(url)
         logs.append(f"HTTP request to {url} completed: {response.status_code}")
         
-        # Get nmap analysis
+        
         nmap_headers, nmap_logs = _run_nmap_http_headers(url)
         logs.extend(nmap_logs)
         
-        # Combine headers from both sources
+        
         combined_headers = dict(response.headers)
         combined_headers.update(nmap_headers)
         
@@ -1864,7 +1851,7 @@ def generate_header_scan(url: str) -> Dict:
             value = combined_headers.get(header, "")
             status, severity, issues = _analyze_header_value(header, value)
             
-            # Calculate score for this header
+            
             if status == "Missing":
                 header_score = 0
                 if is_critical:
@@ -1878,7 +1865,7 @@ def generate_header_scan(url: str) -> Dict:
                 
             total_score += header_score
             
-            # Format status for display
+            
             display_status = status
             if issues:
                 display_status = f"{status} ({len(issues)} issues)"
@@ -1893,20 +1880,20 @@ def generate_header_scan(url: str) -> Dict:
                 "score": header_score
             })
             
-            # Generate recommendations
+            
             if status == "Missing" and is_critical:
                 recommendations.append(f"CRITICAL: Implement {header.replace('-', ' ').title()} immediately")
             elif issues:
                 recommendations.append(f"Fix {header.replace('-', ' ').title()}: {'; '.join(issues)}")
         
-        # Calculate risk score (0-100, where 0 is perfect, 100 is terrible)
+        
         if max_possible_score > 0:
             security_percentage = (total_score / max_possible_score) * 100
             risk_score = max(0, min(100, 100 - security_percentage))
         else:
             risk_score = 100
             
-        # Add bonus penalties for critical issues
+        
         risk_score += critical_missing * 15
         risk_score = min(100, risk_score)
         
@@ -1916,7 +1903,7 @@ def generate_header_scan(url: str) -> Dict:
                                  if header["status"] not in ["Missing"] 
                                  and HEADER_SCORING.get(header["name"].lower().replace(" ", "-"), {}).get("critical", False))
         
-        # Enhanced tool notes
+        
         if risk_score >= 80:
             security_level = "Critical"
             tool_note = "Immediate action required - multiple critical security headers missing"
@@ -1950,7 +1937,7 @@ def generate_header_scan(url: str) -> Dict:
             "recommendations": recommendations,
             "total_score": int(total_score),
             "max_score": max_possible_score,
-            "logs": logs[-20:],  # Keep last 20 log entries
+            "logs": logs[-20:],  
             "nmap_enabled": bool(nmap_headers),
         }
         
@@ -1978,16 +1965,16 @@ def generate_directory_scan(payload: Dict) -> Dict:
     wl_path = _resolve_wordlist(wordlist)
     entries: List[Dict] = []
     used_tool = None
-    # Coba pakai ffuf jika tersedia + file wordlist ditemukan
+    
     if shutil.which("ffuf") and wl_path and wl_path.exists():
         used_tool = "ffuf"
         try:
             entries, _ = _run_ffuf(base_url, wl_path)
         except RuntimeError as exc:
-            # fallback ke probing HTTP cepat jika ffuf gagal
+            
             entries = []
     if not entries and used_tool is None:
-        # fallback: HTTP probing sederhana menggunakan fallback mini-wordlist
+        
         used_tool = "http"
         targets = DIRECTORY_WORDLIST
         with httpx.Client(timeout=HTTP_TIMEOUT, verify=False, follow_redirects=False) as client:
@@ -2005,7 +1992,7 @@ def generate_directory_scan(payload: Dict) -> Dict:
                 except httpx.HTTPError:
                     entries.append({"path": path, "status": "error", "size": "0"})
 
-    # Hitung skor risiko berbasis status berbahaya
+    
     score = 0
     for entry in entries:
         try:
@@ -2047,7 +2034,7 @@ def generate_surface_scan(payload: Dict) -> Dict:
     techniques = payload.get("techniques") or ["Nuclei", "Nikto", "FFUF"]
     
     def _run_ffuf_surface(target: str):
-        # Prefer wordlist "fuzz" bila ada, fallback ke "admin"
+        
         wl = _resolve_wordlist("fuzz") or _resolve_wordlist("admin")
         if not shutil.which("ffuf"):
             return [], {"name": "FFUF", "status": "skipped", "notes": "ffuf tidak terpasang"}
@@ -2071,7 +2058,7 @@ def generate_surface_scan(payload: Dict) -> Dict:
         status["notes"] = f"{len(findings)} temuan"
         return findings, status
     def _run_nuclei_surface(target: str):
-        # Jalankan nuclei pada origin root serta URL lengkap jika berbeda, menggunakan template HTTP lokal.
+        
         base = _origin_root(target)
         targets = [base]
         if target.rstrip("/") + "/" != base:
@@ -2107,7 +2094,7 @@ def generate_surface_scan(payload: Dict) -> Dict:
         tool_findings, status = runner(url)
         vulnerabilities.extend(tool_findings)
         tools_status.append(status)
-    # Bangun spider dari entri FFUF (path + status code), tidak dari daftar vuln
+    
     spider: List[Dict] = []
     for st in tools_status:
         if st.get("name") == "FFUF" and isinstance(st.get("entries"), list):
@@ -2117,7 +2104,7 @@ def generate_surface_scan(payload: Dict) -> Dict:
                     "code": e.get("status"),
                     "size": e.get("size"),
                 })
-    # Agregasi risiko berbasis severity untuk hasil gabungan
+    
     severity_weights = {"info": 5, "low": 10, "medium": 20, "high": 35, "critical": 55}
     total = 0
     for v in vulnerabilities:
@@ -2125,7 +2112,7 @@ def generate_surface_scan(payload: Dict) -> Dict:
         total += severity_weights.get(sev, 5)
     risk_score = min(100, total)
 
-    # Ringkas temuan per tool agar FE tidak perlu menampilkan daftar panjang
+    
     def _summary(items: List[Dict], tool_names: List[str]) -> List[Dict]:
         order = ["critical", "high", "medium", "low", "info"]
         agg: Dict[str, Dict[str, int]] = {}
@@ -2139,14 +2126,14 @@ def generate_surface_scan(payload: Dict) -> Dict:
                 bucket[sev] = 0
             bucket[sev] += 1
         out = []
-        # Pastikan semua tool ada meski nol
+        
         for tool in tool_names:
             counts = agg.get(tool, {k: 0 for k in order})
             out.append({"tool": tool, "counts": {k: counts.get(k, 0) for k in order}})
         return sorted(out, key=lambda x: x["tool"].lower())
 
     summary = _summary(vulnerabilities, [t.get("name") for t in tools_status if t.get("name")])
-    # Fallback tambahan: jika Nuclei/Nikto 0 tapi status mencatat temuan >0 di notes, gunakan sebagai info
+    
     names = [s["tool"] for s in summary]
     for idx, s in enumerate(list(summary)):
         total_counts = sum((s["counts"] or {}).values()) if s.get("counts") else 0
@@ -2158,7 +2145,7 @@ def generate_surface_scan(payload: Dict) -> Dict:
                 if m:
                     n = int(m.group(1))
                     summary[idx]["counts"] = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": n}
-    # Fallback: jika ringkasan FFUF nol tetapi ada entries, hitung dari entries
+    
     tool_index = {item["name"]: idx for idx, item in enumerate(tools_status) if item.get("name")}
     names = [s["tool"] for s in summary]
     if "FFUF" in tool_index and "FFUF" in names:
@@ -2206,7 +2193,7 @@ def generate_osint(payload: Dict) -> Dict:
     if tab == "phone":
         carrier_map = ["Telkomsel", "Indosat", "XL Axiata", "Tri"]
         location_map = ["Jakarta", "Bandung", "Surabaya", "Yogyakarta"]
-        # Minimal country metadata map (non-exhaustive, fallback to Unknown)
+        
         COUNTRY_META = {
             "62": {
                 "country": "Indonesia",
@@ -2236,7 +2223,7 @@ def generate_osint(payload: Dict) -> Dict:
                 "regions": ["England", "Scotland", "Wales", "Northern Ireland"],
             },
         }
-        # Parse phone like phone.py expects: "+62 878..." or "62 878..."
+        
         cc = None
         subscriber = None
         m = re.match(r"^\+?(\d{1,3})\s*([0-9\s-]{5,})$", value.strip())
@@ -2270,30 +2257,30 @@ def generate_osint(payload: Dict) -> Dict:
             "timezone": timezone,
             "region": region_pick,
         }
-        # Try phoneinfoga (CLI) if available
+        
         if e164:
             pfi_res, pfi_status = _run_phoneinfoga(e164)
             tools_status.append(pfi_status)
             if pfi_res:
                 tool_results["phoneinfoga"] = pfi_res
                 tool_outputs.append({"name": "phoneinfoga", **pfi_res})
-        # Try Truecaller via local helper (for ID numbers) then fallback to web parser
+        
         tc_cookie = (payload.get("truecaller_cookie") or os.environ.get("TRUECALLER_COOKIE") or None)
         if tc_cookie and (e164 or (cc and subscriber)):
-            # Prefer bs4 helper using Indonesian ISO path
+            
             if cc == "62" and subscriber:
                 tc_res, tc_status = _run_truecaller_bs4(subscriber, tc_cookie)
                 tools_status.append(tc_status)
                 if tc_res:
                     tool_results["truecaller"] = tc_res
                     tool_outputs.append({"name": "truecaller", **tc_res})
-            # Fallback generic web parser
+            
             tw_res, tw_status = _run_truecaller(e164 or f"+{cc}{subscriber}", tc_cookie)
             tools_status.append(tw_status)
             if tw_res:
                 tool_results["truecaller-web"] = tw_res
                 tool_outputs.append({"name": "truecaller-web", **tw_res})
-            # Propagate name to summary result if available
+            
             for key in ("truecaller", "truecaller-web"):
                 data = tool_results.get(key) or {}
                 try:
@@ -2303,13 +2290,13 @@ def generate_osint(payload: Dict) -> Dict:
                         result["name"] = name_val
                 except Exception:
                     pass
-        # Try phonenumbers (library) if available
+        
         pn_res, pn_status = _run_phonenumbers_local(e164 or (f"+{cc}{subscriber}" if (cc and subscriber) else value))
         tools_status.append(pn_status)
         if pn_res:
             tool_results["phonenumbers"] = pn_res
             tool_outputs.append({"name": "phonenumbers", **pn_res})
-            # Prefer phonenumbers details for FE fields if available
+            
             details = pn_res.get("details") if isinstance(pn_res, dict) else None
             if isinstance(details, dict) and details:
                 try:
@@ -2317,21 +2304,21 @@ def generate_osint(payload: Dict) -> Dict:
                     result["international"] = details.get("international") or result.get("international")
                     result["national"] = details.get("national") or result.get("national")
                     result["country_code"] = details.get("country_code") or result.get("country_code")
-                    # phonenumbers returns a location string; use as country/region if sensible
+                    
                     loc = details.get("location")
                     if loc:
-                        # If country is empty or generic, set from location
+                        
                         if not result.get("country"):
                             result["country"] = loc
-                        # Region prefers more granular value; if we had no region, set it
+                        
                         if not result.get("region"):
                             result["region"] = loc
-                        # Also expose location consistently
+                        
                         result["location"] = loc
-                    # Carrier direct from phonenumbers
+                    
                     if details.get("carrier"):
                         result["carrier"] = details.get("carrier")
-                    # Timezones: list -> comma string
+                    
                     tzs = details.get("timezones")
                     if isinstance(tzs, (list, tuple)):
                         result["timezone"] = ", ".join([str(x) for x in tzs if x])
@@ -2339,7 +2326,7 @@ def generate_osint(payload: Dict) -> Dict:
                         result["timezone"] = tzs
                 except Exception:
                     pass
-        # Try ignorant with phone as identifier (supports `ignorant 62 878...`)
+        
         ign_res, ign_status = _run_ignorant(value)
         tools_status.append(ign_status)
         if ign_res:
@@ -2347,20 +2334,20 @@ def generate_osint(payload: Dict) -> Dict:
             tool_outputs.append({"name": "ignorant", **ign_res})
     elif tab == "domain":
         registrar_map = ["Cloudflare", "Namecheap", "Pandi", "GoDaddy"]
-        # Default/fallback values
+        
         result = {
             "registrar": registrar_map[_deterministic_int(value, 0, len(registrar_map) - 1)],
             "created": f"20{_deterministic_int(value,15,24)}-0{_deterministic_int(value,1,9)}-12",
             "technologies": ["Nginx", "React", "Laravel"],
         }
-        # Integrate whois
+        
         whois_res, whois_status = _run_whois(value)
         tools_status.append(whois_status)
         if whois_res:
             tool_results["whois"] = whois_res
             tool_outputs.append({"name": "whois", **whois_res})
             det = whois_res.get("details") or {}
-            # Promote key fields to result for FE summary
+            
             if det.get("registrar"):
                 result["registrar"] = det["registrar"]
             if det.get("created"):
@@ -2376,7 +2363,7 @@ def generate_osint(payload: Dict) -> Dict:
             if det.get("country"):
                 result["country"] = det["country"]
     elif tab == "email":
-        # Integrate holehe if available
+        
         hh_res, hh_status = _run_holehe(value)
         tools_status.append(hh_status)
         if hh_res:
@@ -2388,7 +2375,7 @@ def generate_osint(payload: Dict) -> Dict:
             "disposable": value.endswith("@tempmail.com"),
         }
     else:
-        # username
+        
         ign_res, ign_status = _run_ignorant(value)
         tools_status.append(ign_status)
         if ign_res:
@@ -2398,7 +2385,7 @@ def generate_osint(payload: Dict) -> Dict:
             "appearances": _deterministic_int(value, 1, 12),
             "platforms": ["GitHub", "Twitter", "StackOverflow"],
         }
-    # Build summary text
+    
     parts = []
     for name, data in tool_results.items():
         counts = data.get("counts", {}) if isinstance(data, dict) else {}
@@ -2406,7 +2393,7 @@ def generate_osint(payload: Dict) -> Dict:
             f"{name}:+{counts.get('+',0)} -{counts.get('-',0)} x{counts.get('x',0)} !{counts.get('!',0)}"
         )
     summary_text = ", ".join(parts) if parts else None
-    # Confidence bump if tools found many
+    
     found_total = sum(res.get("found", 0) for res in tool_results.values())
     if found_total >= 10:
         confidence = "High"
@@ -2476,14 +2463,14 @@ def generate_credential_audit(payload: Dict) -> Dict:
     tool_results = {}
     tools_used = []
     
-    # Common weak passwords (rockyou top patterns)
+    
     weak_patterns = [
         "password", "123456", "admin", "root", "guest", "test", "user",
         "qwerty", "letmein", "welcome", "monkey", "dragon", "master",
         "shadow", "football", "baseball", "superman", "batman"
     ]
     
-    # Password complexity analysis
+    
     complexity_stats = {
         "min_length": float('inf'),
         "max_length": 0,
@@ -2506,12 +2493,12 @@ def generate_credential_audit(payload: Dict) -> Dict:
         username = parts[0]
         credential = parts[1]
         
-        # Detect if it's a hash or plaintext using real tools
+        
         print(f"DEBUG MAIN: Processing credential: '{credential}'")
         is_hash, detection_method = _detect_hash_type_with_tools(credential)
         print(f"DEBUG MAIN: Detection result: is_hash='{is_hash}', method='{detection_method}'")
         
-        # Track detection tools used
+        
         if detection_method == "enhanced" and "enhanced-detector" not in tools_used:
             tools_used.append("enhanced-detector")
             print(f"DEBUG MAIN: Added enhanced-detector to tools_used")
@@ -2526,7 +2513,7 @@ def generate_credential_audit(payload: Dict) -> Dict:
         
         if is_hash and is_hash != "":
             print(f"DEBUG MAIN: Processing as HASH: {is_hash}")
-            # Check against common hash database first (fastest)
+            
             rainbow_result = _check_common_hashes(credential)
             cracked_by_rainbow = rainbow_result.get("status") == "found"
             
@@ -2540,17 +2527,17 @@ def generate_credential_audit(payload: Dict) -> Dict:
                 "plaintext": rainbow_result.get("plaintext") if cracked_by_rainbow else None
             })
             
-            # Mark as crackable if found in rainbow tables or weak hash type
+            
             if cracked_by_rainbow:
                 crackable.append(f"{username}:{credential[:16]}... → {rainbow_result.get('plaintext')} (Rainbow tables)")
             elif is_hash in ["MD5", "NTLM", "LM", "SHA1"]:
                 crackable.append(f"{username}:{credential[:16]}... (Weak hash: {is_hash})")
         else:
             print(f"DEBUG MAIN: Processing as PLAINTEXT: {credential}")
-            # Plaintext password analysis
+            
             password = credential
             
-            # Update complexity stats
+            
             length = len(password)
             complexity_stats["min_length"] = min(complexity_stats["min_length"], length)
             complexity_stats["max_length"] = max(complexity_stats["max_length"], length)
@@ -2564,35 +2551,35 @@ def generate_credential_audit(payload: Dict) -> Dict:
             if any(not c.isalnum() for c in password):
                 complexity_stats["has_symbols"] += 1
                 
-            # Calculate entropy (simplified)
+            
             entropy = _calculate_password_entropy(password)
             complexity_stats["total_entropy"] += entropy
             
-            # Weakness detection (JtR style)
+            
             weakness_reasons = []
             
-            # Length check
+            
             if length < 8:
                 weakness_reasons.append("too_short")
             
-            # Common patterns
+            
             password_lower = password.lower()
             if any(weak in password_lower for weak in weak_patterns):
                 weakness_reasons.append("common_pattern")
                 
-            # Dictionary words
+            
             if password_lower in ["password", "admin123", "letmein", "welcome123"]:
                 weakness_reasons.append("dictionary_word")
                 
-            # Keyboard patterns
+            
             if _is_keyboard_pattern(password):
                 weakness_reasons.append("keyboard_pattern")
                 
-            # Date patterns
+            
             if _contains_date_pattern(password):
                 weakness_reasons.append("date_pattern")
                 
-            # Username in password
+            
             if username.lower() in password_lower or password_lower in username.lower():
                 weakness_reasons.append("contains_username")
                 
@@ -2604,7 +2591,7 @@ def generate_credential_audit(payload: Dict) -> Dict:
                     "jtr_estimate": "< 1 hour" if entropy < 25 else "< 1 day" if entropy < 35 else "< 1 week" if entropy < 45 else "months+"
                 })
             
-            # Reuse detection
+            
             if password in seen_passwords:
                 reused.append({
                     "current": entry,
@@ -2613,25 +2600,25 @@ def generate_credential_audit(payload: Dict) -> Dict:
                 })
             seen_passwords[password] = entry
     
-    # Run real tools on hashes if any found
+    
     if hash_analysis and (shutil.which("john") or shutil.which("hashcat")):
-        # Create temporary hash file for tools
+        
         try:
             with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
                 hash_file_path = f.name
                 for hash_entry in hash_analysis:
                     if not hash_entry.get("rainbow_cracked"):
-                        # Write in john format: username:hash
+                        
                         original_entry = next((e for e in cleaned if hash_entry["username"] in e), "")
                         if original_entry:
                             f.write(original_entry + '\n')
             
-            # Try John the Ripper first
+            
             if shutil.which("john") and os.path.getsize(hash_file_path) > 0:
                 john_result = _run_john_the_ripper(hash_file_path)
                 tool_results["john"] = john_result
                 
-                # Update hash analysis with JtR results
+                
                 for cracked_line in john_result.get("cracked", []):
                     if ":" in cracked_line:
                         cracked_user, cracked_pass = cracked_line.split(":", 1)
@@ -2641,13 +2628,13 @@ def generate_credential_audit(payload: Dict) -> Dict:
                                 hash_entry["plaintext"] = cracked_pass
                                 crackable.append(f"{cracked_user}:*** → {cracked_pass} (John the Ripper)")
             
-            # Try hashcat if john didn't crack everything
+            
             uncracked_hashes = [h for h in hash_analysis if not h.get("rainbow_cracked") and not h.get("jtr_cracked")]
             if shutil.which("hashcat") and uncracked_hashes:
                 hashcat_result = _run_hashcat_quick(hash_file_path)
                 tool_results["hashcat"] = hashcat_result
                 
-                # Update with hashcat results
+                
                 for cracked_line in hashcat_result.get("cracked", []):
                     if ":" in cracked_line:
                         cracked_hash, cracked_pass = cracked_line.split(":", 1)
@@ -2657,13 +2644,13 @@ def generate_credential_audit(payload: Dict) -> Dict:
                                 hash_entry["plaintext"] = cracked_pass
                                 crackable.append(f"{hash_entry['username']}:*** → {cracked_pass} (Hashcat)")
             
-            # Clean up temp file
+            
             os.unlink(hash_file_path)
             
         except Exception as e:
             tool_results["error"] = f"Tool execution error: {str(e)}"
     
-    # Calculate averages for plaintext passwords only
+    
     plaintext_entries = []
     for e in cleaned:
         if ":" in e:
@@ -2671,7 +2658,7 @@ def generate_credential_audit(payload: Dict) -> Dict:
             if len(parts) == 2:
                 cred = parts[1]
                 hash_type, _ = _detect_hash_type_with_tools(cred)
-                if not hash_type:  # It's plaintext
+                if not hash_type:  
                     plaintext_entries.append(cred)
     
     total_passwords = len(plaintext_entries)
@@ -2683,7 +2670,7 @@ def generate_credential_audit(payload: Dict) -> Dict:
         complexity_stats["min_length"] = 0
         complexity_stats["total_entropy"] = 0
     
-    # Policy compliance
+    
     policy = {
         "uppercase": complexity_stats["has_uppercase"] > 0,
         "lowercase": complexity_stats["has_lowercase"] > 0,
@@ -2693,28 +2680,28 @@ def generate_credential_audit(payload: Dict) -> Dict:
         "avg_entropy": round(complexity_stats["total_entropy"], 1)
     }
     
-    # Risk scoring (JtR/Hashcat style) - Proportional calculation
+    
     total_credentials = len(cleaned)
     if total_credentials == 0:
         risk_score = 0
     else:
-        # Base score calculation (0-100)
+        
         risk_score = 0
         
-        # Weak password percentage (0-40 points)
+        
         weak_percentage = (len(weak) / total_credentials) * 100
         risk_score += min(40, weak_percentage * 0.4)
         
-        # Reused password percentage (0-25 points)
+        
         reused_percentage = (len(reused) / total_credentials) * 100
         risk_score += min(25, reused_percentage * 0.25)
         
-        # Crackable hash percentage (0-30 points)
+        
         if hash_analysis:
             crackable_percentage = (len(crackable) / len(hash_analysis)) * 100
             risk_score += min(30, crackable_percentage * 0.3)
         
-        # Policy compliance penalties (0-15 points total)
+        
         policy_penalties = 0
         if not policy["symbols"]:
             policy_penalties += 3
@@ -2727,14 +2714,14 @@ def generate_credential_audit(payload: Dict) -> Dict:
         
         risk_score += policy_penalties
         
-        # Ensure minimum score for any issues found
-        if weak or reused or crackable:
-            risk_score = max(risk_score, 15)  # Minimum 15 if any issues
         
-        # Cap at 100
+        if weak or reused or crackable:
+            risk_score = max(risk_score, 15)  
+        
+        
         risk_score = min(100, int(risk_score))
     
-    # Enhanced recommendations
+    
     recommendations = []
     
     if weak:
@@ -2758,10 +2745,10 @@ def generate_credential_audit(payload: Dict) -> Dict:
     if not policy["symbols"]:
         recommendations.append("🔤 Wajibkan karakter khusus dalam password policy")
         
-    # Enhanced JtR/Hashcat command suggestions based on actual results
+    
     jtr_commands = []
     if hash_analysis:
-        # Suggest commands based on hash types found
+        
         hash_types = list(set(h["hash_type"] for h in hash_analysis if h["hash_type"]))
         for hash_type in hash_types:
             john_format = get_john_format(hash_type)
@@ -2772,7 +2759,7 @@ def generate_credential_audit(payload: Dict) -> Dict:
             if hashcat_mode is not None:
                 jtr_commands.append(f"hashcat -m {hashcat_mode} -a 0 hashfile.txt rockyou.txt")
     
-    # Add tool execution results to recommendations
+    
     if tool_results:
         if tool_results.get("john", {}).get("status") == "completed":
             john_time = tool_results["john"].get("time_taken", 0)
@@ -2794,7 +2781,7 @@ def generate_credential_audit(payload: Dict) -> Dict:
         recommendations.append("✅ Credential audit menunjukkan keamanan yang baik")
         recommendations.append("🔄 Lanjutkan audit berkala dengan JtR/Hashcat")
     
-    # Determine actual tools used
+    
     tools_used = []
     if tool_results.get("john"):
         tools_used.append("john")
@@ -2831,19 +2818,19 @@ def _detect_hash_type_with_tools(credential: str) -> tuple[str, str]:
     if not credential:
         return "", "hashcat"
     
-    # PRIORITY 1: Use enhanced built-in detector (most reliable for profiling)
+    
     enhanced_result = detect_hash_type(credential)
     print(f"DEBUG: Enhanced detector input: '{credential}'")
     print(f"DEBUG: Enhanced detector result: '{enhanced_result}'")
     
-    if enhanced_result != "":  # Hash detected
+    if enhanced_result != "":  
         print(f"DEBUG: Returning hash type: {enhanced_result}")
         return enhanced_result, "enhanced"
-    else:  # Plaintext or no detection
+    else:  
         print(f"DEBUG: Enhanced detector says plaintext or no detection")
         return "", "enhanced"
     
-    # PRIORITY 3: Fallback to hashid if available
+    
     if shutil.which("hashid"):
         try:
             result = subprocess.run(
@@ -2858,14 +2845,14 @@ def _detect_hash_type_with_tools(credential: str) -> tuple[str, str]:
                     if '[+]' in line and 'Possible' not in line and 'Unknown' not in line:
                         hash_type = line.split('[+]')[-1].strip()
                         if hash_type and hash_type != "Unknown hash":
-                            # Double-check for obvious passwords
+                            
                             if any(pattern in credential.lower() for pattern in ["admin", "password", "123", "test", "user"]):
                                 return "", "hashid"
                             return hash_type, "hashid"
         except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
             pass
     
-    # PRIORITY 4: Fallback to hash-identifier
+    
     if shutil.which("hash-identifier"):
         try:
             process = subprocess.Popen(
@@ -2882,14 +2869,14 @@ def _detect_hash_type_with_tools(credential: str) -> tuple[str, str]:
                     if "Possible Hashs:" in line and i + 1 < len(lines):
                         hash_type = lines[i + 1].strip().replace('[+]', '').strip()
                         if hash_type and hash_type != "Not Found.":
-                            # Double-check for obvious passwords
+                            
                             if any(pattern in credential.lower() for pattern in ["admin", "password", "123", "test", "user"]):
                                 return "", "hash-identifier"
                             return hash_type, "hash-identifier"
         except (subprocess.TimeoutExpired, subprocess.CalledProcessError):
             pass
     
-    # If no hash detected by any method, it's plaintext
+    
     return "", "fallback"
 
 
@@ -2898,20 +2885,20 @@ def _detect_hash_type_builtin(credential: str) -> str:
     if not credential:
         return ""
     
-    # Check for obvious plaintext patterns first
-    if any(c in credential for c in [' ', '!', '@', '#', '$', '%', '^', '&', '*', '(', ')', '-', '_', '=', '+']) and len(credential) < 50:
-        # If it contains common password characters and is short, likely plaintext
+    
+    if any(c in credential for c in [' ', '!', '@', '
+        
         if not (len(credential) in [16, 32, 40, 56, 64, 80, 96, 128] and all(c in "0123456789abcdefABCDEF" for c in credential)):
             return ""
     
-    # Hash format detection (from hash-id.py patterns)
+    
     h = credential.lower()
     
-    # bcrypt patterns
+    
     if credential.startswith("$2a$") or credential.startswith("$2b$") or credential.startswith("$2y$"):
         return "bcrypt"
     
-    # Unix crypt patterns  
+    
     if credential.startswith("$1$"):
         return "MD5crypt"
     if credential.startswith("$6$"):
@@ -2919,11 +2906,11 @@ def _detect_hash_type_builtin(credential: str) -> str:
     if credential.startswith("$5$"):
         return "SHA256crypt"
     
-    # WordPress/phpBB patterns
+    
     if credential.startswith("$P$") or credential.startswith("$H$"):
         return "WordPress/phpBB3"
     
-    # Length-based detection for hex hashes
+    
     if all(c in "0123456789abcdef" for c in h):
         if len(h) == 32:
             return "MD5"
@@ -2940,17 +2927,17 @@ def _detect_hash_type_builtin(credential: str) -> str:
         elif len(h) == 16:
             return "LM"
     
-    # NTLM (usually 32 hex chars, but context matters)
+    
     if len(h) == 32 and all(c in "0123456789abcdef" for c in h) and ":" not in credential:
         return "NTLM"
     
-    # MySQL hash patterns
+    
     if len(h) == 16 and all(c in "0123456789abcdef" for c in h):
         return "MySQL323"
     if credential.startswith("*") and len(credential) == 41:
         return "MySQL5"
     
-    # SAM format (LM:NTLM)
+    
     if ":" in credential and len(credential) == 65:
         parts = credential.split(":")
         if len(parts) == 2 and len(parts[0]) == 32 and len(parts[1]) == 32:
@@ -2969,7 +2956,7 @@ def _calculate_password_entropy(password: str) -> float:
     if not password:
         return 0
         
-    # Character set size estimation
+    
     charset_size = 0
     if any(c.islower() for c in password):
         charset_size += 26
@@ -2978,12 +2965,12 @@ def _calculate_password_entropy(password: str) -> float:
     if any(c.isdigit() for c in password):
         charset_size += 10
     if any(not c.isalnum() for c in password):
-        charset_size += 32  # Common symbols
+        charset_size += 32  
         
     if charset_size == 0:
         return 0
         
-    # Entropy = log2(charset_size^length)
+    
     import math
     return len(password) * math.log2(charset_size)
 
@@ -3004,13 +2991,13 @@ def _contains_date_pattern(password: str) -> bool:
     """Detect date patterns in password"""
     import re
     
-    # Common date patterns
+    
     date_patterns = [
-        r'\d{4}',  # Year
-        r'\d{1,2}/\d{1,2}/\d{2,4}',  # Date formats
+        r'\d{4}',  
+        r'\d{1,2}/\d{1,2}/\d{2,4}',  
         r'\d{1,2}-\d{1,2}-\d{2,4}',
-        r'\d{8}',  # YYYYMMDD
-        r'(19|20)\d{2}',  # 1900-2099
+        r'\d{8}',  
+        r'(19|20)\d{2}',  
     ]
     
     for pattern in date_patterns:
@@ -3030,20 +3017,20 @@ def generate_wappalyzer_scan(payload: Dict[str, Any]) -> Dict[str, Any]:
     if not domain:
         raise RuntimeError("Domain is required for Wappalyzer scan")
     
-    # Remove protocol if present
+    
     if domain.startswith(("http://", "https://")):
         domain = urlparse(domain).netloc or domain
     
     technologies = {}
     total_found = 0
     
-    # Try wappy command first
+    
     try:
-        # Create temporary file for wappalyzer output
+        
         with tempfile.NamedTemporaryFile(mode='w+', suffix='.json', delete=False) as tmp_file:
             tmp_path = tmp_file.name
         
-        # Run wappy command
+        
         cmd = ["wappy", "-u", domain, "-wf", tmp_path]
         result = subprocess.run(
             cmd,
@@ -3053,7 +3040,7 @@ def generate_wappalyzer_scan(payload: Dict[str, Any]) -> Dict[str, Any]:
             cwd=Path.home()
         )
         
-        # Try to parse JSON output first
+        
         if result.returncode == 0 and Path(tmp_path).exists():
             try:
                 with open(tmp_path, 'r') as f:
@@ -3061,7 +3048,7 @@ def generate_wappalyzer_scan(payload: Dict[str, Any]) -> Dict[str, Any]:
                     if content:
                         wapp_data = json.loads(content)
                         
-                        # Parse wappalyzer JSON output format
+                        
                         if isinstance(wapp_data, list) and wapp_data:
                             site_data = wapp_data[0]
                             if "technologies" in site_data:
@@ -3077,14 +3064,14 @@ def generate_wappalyzer_scan(payload: Dict[str, Any]) -> Dict[str, Any]:
                                     technologies[category].append(tech_info)
                                     total_found += 1
                 
-                # Clean up temp file
+                
                 try:
                     os.unlink(tmp_path)
                 except:
                     pass
                     
             except (json.JSONDecodeError, KeyError, IndexError):
-                # If JSON parsing fails, try to parse from stdout
+                
                 if result.stdout:
                     lines = result.stdout.strip().split('\n')
                     
@@ -3101,7 +3088,7 @@ def generate_wappalyzer_scan(payload: Dict[str, Any]) -> Dict[str, Any]:
                                 if category not in technologies:
                                     technologies[category] = []
                                 
-                                # Parse version info
+                                
                                 name = tech_info
                                 version = None
                                 if '[version: ' in tech_info:
@@ -3117,23 +3104,23 @@ def generate_wappalyzer_scan(payload: Dict[str, Any]) -> Dict[str, Any]:
                                 total_found += 1
         
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
-        # wappy command failed or not found, continue to fallback
+        
         pass
     except Exception:
-        # Any other error with wappy, continue to fallback
+        
         pass
     
-    # Fallback: Basic HTTP header analysis if wappy failed or found nothing
+    
     if not technologies:
         try:
-            # Try both HTTP and HTTPS
+            
             for protocol in ['https', 'http']:
                 try:
                     response = httpx.get(f"{protocol}://{domain}", timeout=HTTP_TIMEOUT, follow_redirects=True)
                     headers = dict(response.headers)
                     content = response.text.lower()
                     
-                    # Server detection
+                    
                     server = headers.get("server", "").lower()
                     if "nginx" in server:
                         technologies.setdefault("Web servers", []).append({"name": "Nginx", "version": None})
@@ -3144,11 +3131,11 @@ def generate_wappalyzer_scan(payload: Dict[str, Any]) -> Dict[str, Any]:
                     elif "cloudflare" in server:
                         technologies.setdefault("CDN", []).append({"name": "Cloudflare", "version": None})
                     
-                    # Programming language detection
+                    
                     if "x-powered-by" in headers:
                         powered_by = headers["x-powered-by"].lower()
                         if "php" in powered_by:
-                            # Try to extract PHP version
+                            
                             php_version = None
                             if "/" in powered_by:
                                 php_version = powered_by.split("/")[-1].strip()
@@ -3156,7 +3143,7 @@ def generate_wappalyzer_scan(payload: Dict[str, Any]) -> Dict[str, Any]:
                         elif "asp.net" in powered_by:
                             technologies.setdefault("Programming languages", []).append({"name": "ASP.NET", "version": None})
                     
-                    # CMS detection from content
+                    
                     if "wp-content" in content or "wordpress" in content:
                         technologies.setdefault("CMS", []).append({"name": "WordPress", "version": None})
                     elif "joomla" in content:
@@ -3164,26 +3151,26 @@ def generate_wappalyzer_scan(payload: Dict[str, Any]) -> Dict[str, Any]:
                     elif "drupal" in content:
                         technologies.setdefault("CMS", []).append({"name": "Drupal", "version": None})
                     
-                    # JavaScript library detection
+                    
                     if "jquery" in content:
                         technologies.setdefault("JavaScript libraries", []).append({"name": "jQuery", "version": None})
                     if "bootstrap" in content:
                         technologies.setdefault("UI frameworks", []).append({"name": "Bootstrap", "version": None})
                     
-                    # E-commerce detection
+                    
                     if "woocommerce" in content:
                         technologies.setdefault("Ecommerce", []).append({"name": "WooCommerce", "version": None})
                     elif "shopify" in content:
                         technologies.setdefault("Ecommerce", []).append({"name": "Shopify", "version": None})
                     
                     total_found = sum(len(techs) for techs in technologies.values())
-                    break  # Success, exit the protocol loop
+                    break  
                     
                 except Exception:
-                    continue  # Try next protocol
+                    continue  
                     
         except Exception:
-            # Complete fallback - return minimal valid response
+            
             technologies = {"Web servers": [{"name": "Unknown", "version": None}]}
             total_found = 1
     
@@ -3201,10 +3188,10 @@ def _run_john_the_ripper(hash_file_path: str, hash_format: str = None) -> Dict:
         return {"tool": "john", "status": "not_installed", "cracked": [], "time_taken": 0}
     
     try:
-        # Prepare john command
+        
         cmd = ["john", "--show", hash_file_path]
         if hash_format:
-            # Map common formats to john formats
+            
             john_formats = {
                 "MD5": "Raw-MD5",
                 "SHA1": "Raw-SHA1", 
@@ -3216,10 +3203,10 @@ def _run_john_the_ripper(hash_file_path: str, hash_format: str = None) -> Dict:
             if hash_format in john_formats:
                 cmd = ["john", f"--format={john_formats[hash_format]}", hash_file_path]
         
-        # Run quick crack attempt (30 seconds max)
+        
         start_time = time.time()
         
-        # First try to show already cracked
+        
         show_result = subprocess.run(
             ["john", "--show", hash_file_path],
             capture_output=True,
@@ -3233,16 +3220,16 @@ def _run_john_the_ripper(hash_file_path: str, hash_format: str = None) -> Dict:
                 if ':' in line and line.strip():
                     cracked.append(line.strip())
         
-        # If nothing cracked yet, try quick crack
+        
         if not cracked:
             crack_result = subprocess.run(
                 cmd + ["--wordlist=/usr/share/wordlists/rockyou.txt"] if os.path.exists("/usr/share/wordlists/rockyou.txt") else cmd,
                 capture_output=True,
                 text=True,
-                timeout=30  # Quick 30-second attempt
+                timeout=30  
             )
             
-            # Check results again
+            
             show_result = subprocess.run(
                 ["john", "--show", hash_file_path],
                 capture_output=True,
@@ -3278,18 +3265,18 @@ def _run_hashcat_quick(hash_file_path: str, hash_mode: int = None) -> Dict:
     try:
         start_time = time.time()
         
-        # Determine hashcat mode
+        
         if hash_mode is None:
-            hash_mode = 0  # MD5 default
+            hash_mode = 0  
             
-        # Quick dictionary attack (15 seconds max)
+        
         cmd = [
             "hashcat", 
             "-m", str(hash_mode),
-            "-a", "0",  # Dictionary attack
+            "-a", "0",  
             hash_file_path,
             "/usr/share/wordlists/rockyou.txt" if os.path.exists("/usr/share/wordlists/rockyou.txt") else "/usr/share/dict/words",
-            "--runtime=15",  # 15 second limit
+            "--runtime=15",  
             "--quiet"
         ]
         
@@ -3300,7 +3287,7 @@ def _run_hashcat_quick(hash_file_path: str, hash_mode: int = None) -> Dict:
             timeout=20
         )
         
-        # Check for cracked passwords in potfile
+        
         cracked = []
         try:
             potfile_path = os.path.expanduser("~/.local/share/hashcat/hashcat.potfile")
@@ -3317,7 +3304,7 @@ def _run_hashcat_quick(hash_file_path: str, hash_mode: int = None) -> Dict:
         return {
             "tool": "hashcat",
             "status": "completed",
-            "cracked": cracked[-10:] if cracked else [],  # Last 10 results
+            "cracked": cracked[-10:] if cracked else [],  
             "time_taken": round(time_taken, 2)
         }
         
@@ -3329,18 +3316,18 @@ def _run_hashcat_quick(hash_file_path: str, hash_mode: int = None) -> Dict:
 
 def _check_common_hashes(password_hash: str) -> Dict:
     """Check hash against common weak hashes database"""
-    # Common weak hashes that would be in rainbow tables
+    
     weak_hashes = {
-        "5d41402abc4b2a76b9719d911017c592": "hello",  # MD5
-        "aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d": "hello",  # SHA1
-        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855": "",  # SHA256 empty
-        "d41d8cd98f00b204e9800998ecf8427e": "",  # MD5 empty
-        "da39a3ee5e6b4b0d3255bfef95601890afd80709": "",  # SHA1 empty
-        "098f6bcd4621d373cade4e832627b4f6": "test",  # MD5 test
-        "a94a8fe5ccb19ba61c4c0873d391e987982fbbd3": "test",  # SHA1 test
-        "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8": "password",  # SHA256 password
-        "5994471abb01112afcc18159f6cc74b4f511b99806da59b3caf5a9c173cacfc5": "secret",  # SHA256 secret
-        "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f": "admin123",  # SHA256 admin123
+        "5d41402abc4b2a76b9719d911017c592": "hello",  
+        "aaf4c61ddcc5e8a2dabede0f3b482cd9aea9434d": "hello",  
+        "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855": "",  
+        "d41d8cd98f00b204e9800998ecf8427e": "",  
+        "da39a3ee5e6b4b0d3255bfef95601890afd80709": "",  
+        "098f6bcd4621d373cade4e832627b4f6": "test",  
+        "a94a8fe5ccb19ba61c4c0873d391e987982fbbd3": "test",  
+        "5e884898da28047151d0e56f8dc6292773603d0d6aabbdd62a11ef721d1542d8": "password",  
+        "5994471abb01112afcc18159f6cc74b4f511b99806da59b3caf5a9c173cacfc5": "secret",  
+        "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f": "admin123",  
     }
     
     if password_hash.lower() in weak_hashes:
