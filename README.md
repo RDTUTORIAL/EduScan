@@ -219,6 +219,7 @@ eduscan/
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
+| `/api/health` | GET | API health check |
 | `/api/port-scan` | POST | Network port scanning |
 | `/api/sqli-scan` | POST | SQL injection testing |
 | `/api/xss-scan` | POST | Cross-site scripting testing |
@@ -227,8 +228,12 @@ eduscan/
 | `/api/osint` | POST | OSINT information gathering |
 | `/api/credential-audit` | POST | Password security audit |
 | `/api/wappalyzer` | POST | Technology fingerprinting |
-| `/api/history` | GET/POST/DELETE | Scan history management |
+| `/api/history` | GET | Paginated scan history |
+| `/api/history` | POST | Add custom history entry |
+| `/api/history` | DELETE | Clear all history entries |
+| `/api/history/{entry_id}` | DELETE | Delete a specific history record |
 | `/api/user/stats` | GET | User statistics |
+| `/api/scan-history` | GET | Legacy scan history alias |
 
 ## 🛡️ Security & Ethics
 
@@ -455,6 +460,7 @@ eduscan/
 
 | Endpoint | Method | Deskripsi |
 |----------|--------|-----------|
+| `/api/health` | GET | Cek status API |
 | `/api/port-scan` | POST | Scanning port jaringan |
 | `/api/sqli-scan` | POST | Pengujian SQL injection |
 | `/api/xss-scan` | POST | Pengujian cross-site scripting |
@@ -462,8 +468,13 @@ eduscan/
 | `/api/directory-buster` | POST | Penemuan direktori/file |
 | `/api/osint` | POST | Pengumpulan informasi OSINT |
 | `/api/credential-audit` | POST | Audit keamanan password |
-| `/api/history` | GET/POST/DELETE | Manajemen riwayat scan |
+| `/api/wappalyzer` | POST | Fingerprint teknologi |
+| `/api/history` | GET | Riwayat scan dengan paginasi |
+| `/api/history` | POST | Tambah entri riwayat manual |
+| `/api/history` | DELETE | Hapus seluruh riwayat |
+| `/api/history/{entry_id}` | DELETE | Hapus entri riwayat tertentu |
 | `/api/user/stats` | GET | Statistik pengguna |
+| `/api/scan-history` | GET | Endpoint legacy riwayat scan |
 
 ## 🛡️ Keamanan & Etika
 
