@@ -1032,6 +1032,76 @@ def _probe_port(host: str, port: int, service: str) -> Dict:
     }
 
 
+def _run_nmap_port_scan(host: str, ports: Sequence[Dict]) -> Tuple[List[Dict], Dict[str, int], str]:
+    """Gunakan nmap untuk scan port jika tersedia; fallback ke socket jika gagal."""
+    _ensure_tool("nmap")
+    port_list = ",".join(str(p["port"]) for p in ports)
+    cmd = [
+        "nmap",
+        "-Pn",              # jangan ping dulu
+        "-sS",              # TCP SYN scan
+        "-p",
+        port_list,
+        "--max-retries",
+        "2",
+        "--host-timeout",
+        "15s",
+        "-oG",
+        "-",                # grepable output ke stdout
+        host,
+    ]
+    exit_code, stdout, stderr = _run_command(cmd, timeout=25)
+    if exit_code != 0 and not stdout.strip():
+        raise RuntimeError(f"nmap gagal: {stderr or 'tidak ada output'}")
+
+    table: List[Dict] = []
+    summary = {"open": 0, "closed": 0, "filtered": 0}
+
+    for line in stdout.splitlines():
+        if "Ports:" not in line:
+            continue
+        # Contoh format: Host: 127.0.0.1 ()  Ports: 22/open/tcp//ssh///, 80/closed/tcp//http///
+        try:
+            ports_part = line.split("Ports:")[1].strip()
+        except Exception:
+            continue
+        for item in ports_part.split(","):
+            parts = item.strip().split("/")
+            if len(parts) < 2:
+                continue
+            try:
+                port_num = int(parts[0])
+            except ValueError:
+                continue
+            status_val = parts[1] or "filtered"
+            proto = parts[2] if len(parts) > 2 else "tcp"
+            service = parts[4] if len(parts) > 4 and parts[4] else next(
+                (entry["service"] for entry in SERVICE_PORTS if entry["port"] == port_num), "Custom"
+            )
+            status_norm: PortStatus
+            if status_val.startswith("open"):
+                status_norm = "open"
+            elif status_val.startswith("closed"):
+                status_norm = "closed"
+            else:
+                status_norm = "filtered"
+            summary[status_norm] += 1
+            table.append(
+                {
+                    "port": port_num,
+                    "service": service,
+                    "status": status_norm,
+                    "version": proto,  # tidak ada banner, tampilkan proto
+                    "latency": None,
+                }
+            )
+
+    if not table:
+        raise RuntimeError("nmap tidak menghasilkan tabel port")
+
+    return table, summary, " ".join(cmd)
+
+
 def _http_banner(host: str, port: int, https: bool) -> str:
     scheme = "https" if https else "http"
     url = f"{scheme}://{host}:{port}/"
@@ -1104,13 +1174,24 @@ def generate_port_scan(payload: Dict) -> Dict:
         ports = candidates or SERVICE_PORTS
     else:
         ports = SERVICE_PORTS
-    table = [_probe_port(host, entry["port"], entry["service"]) for entry in ports]
-    summary = {"open": 0, "closed": 0, "filtered": 0}
-    for row in table:
-        summary[row["status"]] += 1
+    # Coba pakai nmap jika tersedia untuk hasil lebih akurat; fallback ke socket scan
+    table: List[Dict]
+    summary: Dict[str, int]
+    command_used = None
+    try:
+        if shutil.which("nmap"):
+            table, summary, command_used = _run_nmap_port_scan(host, ports)
+        else:
+            raise RuntimeError("nmap tidak tersedia")
+    except Exception as exc:
+        table = [_probe_port(host, entry["port"], entry["service"]) for entry in ports]
+        summary = {"open": 0, "closed": 0, "filtered": 0}
+        for row in table:
+            summary[row["status"]] += 1
+        command_used = f"socket-scan {host}:{inferred_port} ({mode}) | fallback: {exc}"
     open_ports = [row for row in table if row["status"] == "open"]
     risk_score = _compute_port_risk(open_ports)
-    command = f"socket-scan {host}:{inferred_port} ({mode})"
+    command = command_used or f"socket-scan {host}:{inferred_port} ({mode})"
     analysis: List[str] = []
     recommendations: List[str] = []
     for entry in open_ports:

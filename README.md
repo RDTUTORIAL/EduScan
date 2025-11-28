@@ -68,7 +68,7 @@ cd eduscan
 ```bash
 npm install
 cp .env.example .env
-# Edit .env if needed (default API: http://localhost:8000/api)
+# Edit .env if needed (default API: /api via CRA proxy)
 npm start
 ```
 
@@ -174,7 +174,8 @@ Create `.env` file in the root directory:
 
 ```bash
 # Frontend Configuration
-REACT_APP_API_BASE_URL=http://localhost:8000/api
+REACT_APP_API_BASE_URL=/api   # Use CRA proxy; works with ngrok tunneling to the frontend
+# REACT_APP_API_BASE_URL=http://localhost:8000/api   # Use this if you deploy the backend separately
 
 # Backend Configuration (optional)
 EDUSCAN_DEBUG=true
@@ -302,7 +303,7 @@ cd eduscan
 ```bash
 npm install
 cp .env.example .env
-# Edit .env jika diperlukan (API default: http://localhost:8000/api)
+# Edit .env jika diperlukan (API default: /api lewat proxy CRA)
 npm start
 ```
 
@@ -408,7 +409,8 @@ Buat file `.env` di direktori root:
 
 ```bash
 # Konfigurasi Frontend
-REACT_APP_API_BASE_URL=http://localhost:8000/api
+REACT_APP_API_BASE_URL=/api   # Gunakan proxy CRA; cocok untuk ngrok ke frontend
+# REACT_APP_API_BASE_URL=http://localhost:8000/api   # Pakai ini jika backend dipisah
 
 # Konfigurasi Backend (opsional)
 EDUSCAN_DEBUG=true
