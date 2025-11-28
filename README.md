@@ -226,6 +226,7 @@ eduscan/
 | `/api/directory-buster` | POST | Directory/file discovery |
 | `/api/osint` | POST | OSINT information gathering |
 | `/api/credential-audit` | POST | Password security audit |
+| `/api/wappalyzer` | POST | Technology fingerprinting |
 | `/api/history` | GET/POST/DELETE | Scan history management |
 | `/api/user/stats` | GET | User statistics |
 
